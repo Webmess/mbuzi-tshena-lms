@@ -10,6 +10,17 @@ const API_URL = import.meta.env.VITE_API_URL;
 const PAGE_SIZE = 20;
 const FILTERS = ["All", "Pending Review", "Auto-Approved", "Flagged"];
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 // ---------- Types -----------------------------------------------------------------
 interface LoanRequestListItem {
   id: string;
@@ -207,9 +218,9 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
           {/* Applicant details */}
           <Section icon={<User className="w-4 h-4" />} title="Applicant Details">
             <Grid2>
-              <Field label="Full Name" value={request.name} />
-              <Field label="ID Number" value={request.idNumber} />
-              <Field label="Phone Number" value={request.phone} />
+              <Field label="Full Name" value={request.full_name} />
+              <Field label="ID Number" value={request.id_number} />
+              <Field label="Phone Number" value={request.phone_number} />
               <Field label="Email Address" value={request.email} />
             </Grid2>
           </Section>
@@ -217,10 +228,10 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
           {/* Loan details */}
           <Section icon={<DollarSign className="w-4 h-4" />} title="Loan Details">
             <Grid2>
-              <Field label="Amount Requested" value={request.amount} highlight />
-              <Field label="Loan Type" value={request.loanType} />
-              <Field label="Repayment Term" value={request.term} />
-              <Field label="Application Date" value={request.date} />
+              <Field label="Amount Requested" value={request.loan_amount} highlight />
+              <Field label="Loan Type" value={request.loan_type} />
+              <Field label="Repayment Term" value={request.repayment_term} />
+              <Field label="Application Date" value={formatDate(request.created_at)} />
             </Grid2>
             <div className="mt-3">
               <Field label="Purpose" value={request.purpose} />
@@ -230,10 +241,10 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
           {/* Employment & Banking */}
           <Section icon={<Briefcase className="w-4 h-4" />} title="Employment & Banking">
             <Grid2>
-              <Field label="Employer" value={request.employer} />
-              <Field label="Monthly Income" value={request.income} />
-              <Field label="Bank" value={request.bank} />
-              <Field label="Account Type" value={request.accountType} />
+              <Field label="Employer" value={request.employer_name} />
+              <Field label="Monthly Income" value={request.monthly_income} />
+              <Field label="Bank" value={request.bank_name} />
+              <Field label="Account Type" value={request.account_type} />
             </Grid2>
           </Section>
 
@@ -245,11 +256,11 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
                 <div className="flex items-end gap-3">
                   <span className={clsx(
                     "text-4xl font-black",
-                    request.score < 30 ? "text-[#005B3F]" : request.score < 60 ? "text-amber-600" : "text-red-600"
-                  )}>{request.score}</span>
+                    request.ai_risk_score < 30 ? "text-[#005B3F]" : request.ai_risk_score < 60 ? "text-amber-600" : "text-red-600"
+                  )}>{request.ai_risk_score}</span>
                   <span className="text-sm text-gray-400 font-medium mb-1">/100</span>
                 </div>
-                <RiskBar score={request.score} />
+                <RiskBar score={request.ai_risk_score} />
               </div>
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                 <div className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Repayment Probability</div>
@@ -273,17 +284,17 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
             </div>
             <div className="mt-3">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border">
-                {request.aiAction === "Auto-Approve" ? (
+                {request.ai_action === "Auto-Approve" ? (
                   <span className="inline-flex items-center gap-1 text-green-700 bg-green-100 border-green-200 px-2.5 py-1 rounded-md">
-                    <ShieldCheck className="w-3.5 h-3.5" /> {request.aiAction}
+                    <ShieldCheck className="w-3.5 h-3.5" /> {request.ai_action}
                   </span>
-                ) : request.aiAction === "Flagged" || request.aiAction === "Decline" ? (
+                ) : request.ai_action === "Flagged" || request.ai_action === "Decline" ? (
                   <span className="inline-flex items-center gap-1 text-red-700 bg-red-100 border-red-200 px-2.5 py-1 rounded-md">
-                    <ShieldAlert className="w-3.5 h-3.5" /> {request.aiAction}
+                    <ShieldAlert className="w-3.5 h-3.5" /> {request.ai_action}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-yellow-700 bg-yellow-100 border-yellow-200 px-2.5 py-1 rounded-md">
-                    <Clock className="w-3.5 h-3.5" /> {request.aiAction}
+                    <Clock className="w-3.5 h-3.5" /> {request.ai_action}
                   </span>
                 )}
               </div>

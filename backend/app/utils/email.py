@@ -326,6 +326,124 @@ LOGIN_ALERT_FALLBACK_TEMPLATE = """
 
 
 
+SEND_RESET_EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Reset OTP</title>
+</head>
+
+<body style="margin:0;padding:0;background:#F3F6F8;font-family:Arial,Helvetica,sans-serif;color:#17212B;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F6F8;padding:35px 15px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#FFFFFF;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="background:#063D2E;padding:28px 32px;">
+              <div style="font-size:23px;font-weight:700;color:#FFFFFF;">Mbudzi Tshena</div>
+              <div style="font-size:12px;color:#B9D8CD;margin-top:4px;letter-spacing:.4px;">FINANCIAL SOLUTIONS</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:35px 32px 15px;">
+              <div style="font-size:13px;font-weight:700;color:#C47A00;text-transform:uppercase;letter-spacing:.7px;">Account security</div>
+              <h1 style="margin:8px 0 12px;font-size:28px;line-height:1.25;color:#17212B;">Reset your password</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;color:#59656F;">Hi {{CUSTOMER_NAME}}, use the one-time password below to reset your Mbudzi Tshena account password.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F8F5;border:1px solid #D5EAE1;border-radius:10px;">
+                <tr><td align="center" style="padding:25px 18px;">
+                  <div style="font-size:12px;font-weight:700;color:#68747C;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Your verification code</div>
+                  <div style="font-size:34px;font-weight:700;letter-spacing:8px;color:#063D2E;">{{OTP_CODE}}</div>
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 32px 30px;">
+              <p style="margin:0;font-size:13px;line-height:1.7;color:#68747C;">This code is valid for a limited time. Do not share it with anyone, including Mbudzi Tshena staff.</p>
+              <p style="margin:12px 0 0;font-size:13px;line-height:1.7;color:#68747C;">If you did not request a password reset, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px 32px;background:#F8FAFB;">
+              <div style="font-size:13px;font-weight:700;color:#063D2E;margin-bottom:7px;">Mbudzi Tshena Financial Solutions</div>
+              <div style="font-size:11px;line-height:1.7;color:#87929A;">This is an automated email. Please do not reply directly.<br><br>&copy; {{CURRENT_YEAR}} Mbudzi Tshena Financial Solutions. All rights reserved.</div>
+            </td>
+          </tr>
+        </table>
+        <div style="max-width:620px;padding:18px 15px;text-align:center;font-size:10px;line-height:1.6;color:#9AA3A9;">Keep your verification code private.</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+
+
+SEND_CONFIRM_EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Confirmation</title>
+</head>
+
+<body style="margin:0;padding:0;background:#F3F6F8;font-family:Arial,Helvetica,sans-serif;color:#17212B;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F6F8;padding:35px 15px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#FFFFFF;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="background:#063D2E;padding:28px 32px;">
+              <div style="font-size:23px;font-weight:700;color:#FFFFFF;">Mbudzi Tshena</div>
+              <div style="font-size:12px;color:#B9D8CD;margin-top:4px;letter-spacing:.4px;">FINANCIAL SOLUTIONS</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:35px 32px 15px;">
+              <div style="font-size:13px;font-weight:700;color:#C47A00;text-transform:uppercase;letter-spacing:.7px;">Account security</div>
+              <h1 style="margin:8px 0 12px;font-size:28px;line-height:1.25;color:#17212B;">Confirm your account</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;color:#59656F;">Hi {{CUSTOMER_NAME}}, please confirm your account by entering the Code below.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F8F5;border:1px solid #D5EAE1;border-radius:10px;">
+                <tr><td align="center" style="padding:25px 18px;">
+                  <div style="font-size:12px;font-weight:700;color:#68747C;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Your verification code</div>
+                  <div style="font-size:34px;font-weight:700;letter-spacing:8px;color:#063D2E;">{{OTP_CODE}}</div>
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 32px 30px;">
+              <p style="margin:0;font-size:13px;line-height:1.7;color:#68747C;">This code is valid for a limited time. Do not share it with anyone, including Mbudzi Tshena staff.</p>
+              <p style="margin:12px 0 0;font-size:13px;line-height:1.7;color:#68747C;">If you did not request to confirm your account, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px 32px;background:#F8FAFB;">
+              <div style="font-size:13px;font-weight:700;color:#063D2E;margin-bottom:7px;">Mbudzi Tshena Financial Solutions</div>
+              <div style="font-size:11px;line-height:1.7;color:#87929A;">This is an automated email. Please do not reply directly.<br><br>&copy; {{CURRENT_YEAR}} Mbudzi Tshena Financial Solutions. All rights reserved.</div>
+            </td>
+          </tr>
+        </table>
+        <div style="max-width:620px;padding:18px 15px;text-align:center;font-size:10px;line-height:1.6;color:#9AA3A9;">Keep your verification code private.</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
 
 def _load_template(
     template_path: Path,
@@ -419,7 +537,41 @@ def render_login_alert_email(
         },
     )
 
+def render_reset_email(
+    customer_name: str,
+    otp_code: str,
+    current_year: Optional[int] = None,
+) -> str:
 
+    if current_year is None:
+        current_year = datetime.now().year
+
+    return _replace_template_values(
+        SEND_RESET_EMAIL_TEMPLATE,
+        {
+            "CUSTOMER_NAME": customer_name,
+            "OTP_CODE": otp_code,
+            "CURRENT_YEAR": current_year,
+        },
+    )
+
+def render_confirmation_email(
+    customer_name: str,
+    otp_code: str,
+    current_year: Optional[int] = None,
+) -> str:
+
+    if current_year is None:
+        current_year = datetime.now().year
+
+    return _replace_template_values(
+        SEND_CONFIRM_EMAIL_TEMPLATE,
+        {
+            "CUSTOMER_NAME": customer_name,
+            "OTP_CODE": otp_code,
+            "CURRENT_YEAR": current_year,
+        },
+    )
 
 
 async def send_email(
@@ -548,3 +700,47 @@ async def send_login_alert(
         html_body=body,
     )
 
+async def send_reset_email(
+    to_email: str,
+    customer_name: str,
+    otp_code: str,
+) -> bool:
+
+    subject = (
+        "Password Reset Request | "
+        "Mbudzi Tshena"
+    )
+
+    body = render_reset_email(
+        customer_name=customer_name,
+        otp_code=otp_code,
+    )
+
+    return await send_email(
+        to_email=to_email,
+        subject=subject,
+        html_body=body,
+    )
+
+
+async def send_confirmation_email(
+    to_email: str,
+    customer_name: str,
+    otp_code: str,
+) -> bool:
+
+    subject = (
+        "Account Confirmation | "
+        "Mbudzi Tshena"
+    )
+
+    body = render_confirmation_email(
+        customer_name=customer_name,
+        otp_code=otp_code,
+    )
+
+    return await send_email(
+        to_email=to_email,
+        subject=subject,
+        html_body=body,
+    )

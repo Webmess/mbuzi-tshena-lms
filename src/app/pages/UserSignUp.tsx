@@ -244,15 +244,46 @@ export default function UserSignUp() {
     alert("Verification code resent to " + identifier); // simple for now
   };
 
-  const handleVerify = (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = otp.join("");
     if (code.length < 6) return setOtpError("Please enter the full 6-digit code.");
     if (!/^\d{6}$/.test(code)) return setOtpError("Code must contain digits only.");
 
-    // Simulate successful verification
-    // In real app, call backend verify endpoint
-    alert("Account verified successfully!");
+
+    const response = await fetch(`${API_URL}/verify-registration`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: identifier,
+        otp: code,
+      }),
+    });
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      let message = "Unable to verify your account.";
+      if (data?.detail) {
+        if (Array.isArray(data.detail)) {
+          message = data.detail.map((item: any) => item?.msg || "Invalid input.").join(" ");
+        } else if (typeof data.detail === "string") {
+          message = data.detail;
+        }
+      }
+      setOtpError(message);
+      return;
+    }
+
+    // Verification successful → navigate to login with success message
+    
     navigate("/login", {
       replace: true,
       state: { registered: true, message: "Account verified. Please log in." },

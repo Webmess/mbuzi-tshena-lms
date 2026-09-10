@@ -180,20 +180,38 @@ export default function UserLogin() {
   /* ── Forgot password state ── */
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotEmailError, setForgotEmailError] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
-  const handleForgotSubmit = (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (forgotLoading) return;
     setForgotEmailError("");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
       setForgotEmailError("Please enter a valid email address.");
       return;
     }
-    // Simulate sending reset code (replace with actual API call if available)
-    setResetOtp(Array(6).fill(""));
-    setResetOtpError("");
-    setResetResendKey(0);
-    setView("reset-otp");
-    // Optionally show a toast or message
+    setForgotLoading(true);
+    try {
+      const response = await fetch(
+        `${API_URL}/api/auth/forgot-password?email=${encodeURIComponent(forgotEmail)}`,
+        {
+        method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        setForgotEmailError("Failed to send reset code. Please try again.");
+        return;
+      }
+      setResetOtp(Array(6).fill(""));
+      setResetOtpError("");
+      setResetResendKey(0);
+      setView("reset-otp");
+    } catch {
+      setForgotEmailError("Unable to connect to the server. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   /* ── Reset OTP state ── */
@@ -202,6 +220,9 @@ export default function UserLogin() {
   const [resetResendKey, setResetResendKey] = useState(0);
   const [resetCountdown, setResetCountdown] = useState(30);
   const [resetCanResend, setResetCanResend] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resetToken, setResetToken] = useState(""); 
 
   useEffect(() => {
     if (view !== "reset-otp") return;
@@ -220,16 +241,33 @@ export default function UserLogin() {
     return () => clearInterval(timer);
   }, [view, resetResendKey]);
 
-  const handleResetResend = () => {
-    if (!resetCanResend) return;
+  const handleResetResend = async () => {
+    if (!resetCanResend || resendLoading) return;
+    setResendLoading(true);
     setResetOtp(Array(6).fill(""));
     setResetOtpError("");
-    setResetResendKey(k => k + 1);
-    // Simulate resend
+    try {
+      const response = await fetch(
+        `${API_URL}/api/auth/forgot-password?email=${encodeURIComponent(forgotEmail)}`,
+        {
+        method: "POST",
+        },
+      );
+      if (!response.ok) {
+        setResetOtpError("Failed to resend code. Please try again.");
+        return;
+      }
+      setResetResendKey(k => k + 1);
+    } catch {
+      setResetOtpError("Unable to connect to the server. Please try again.");
+    } finally {
+      setResendLoading(false);
+    }
   };
 
-  const handleResetOtpVerify = (e: React.FormEvent) => {
+  const handleResetOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (resetLoading) return;
     const code = resetOtp.join("");
     if (code.length < 6) {
       setResetOtpError("Please enter the full 6-digit code.");
@@ -239,12 +277,40 @@ export default function UserLogin() {
       setResetOtpError("Code must contain digits only.");
       return;
     }
-    // Simulate successful OTP verification
-    setNewPw("");
-    setConfirmNewPw("");
-    setNewPwError("");
-    setShowNewPw(false);
-    setView("new-password");
+    setResetLoading(true);
+    try {
+      const params = new URLSearchParams({
+        email: forgotEmail,
+        reset_code: code,
+      });
+      const response = await fetch(
+        `${API_URL}/api/auth/verify-reset-otp?${params.toString()}`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        let errorMessage = "Invalid or expired OTP. Please try again.";
+        try {
+          const errorData = await response.json();
+          if (typeof errorData?.detail === "string") {
+            errorMessage = errorData.detail;
+          }
+        } catch {
+          // Keep the fallback message when the response is not valid JSON.
+        }
+        setResetOtpError(errorMessage);
+        return;
+      }
+      setResetToken((await response.json()).reset_token);
+      setNewPw("");
+      setConfirmNewPw("");
+      setNewPwError("");
+      setShowNewPw(false);
+      setView("new-password");
+    } catch {
+      setResetOtpError("Unable to connect to the server. Please try again.");
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   /* ── New password state ── */
@@ -252,9 +318,11 @@ export default function UserLogin() {
   const [confirmNewPw, setConfirmNewPw] = useState("");
   const [newPwError, setNewPwError] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
+  const [newPwLoading, setNewPwLoading] = useState(false);
 
-  const handleSetNewPassword = (e: React.FormEvent) => {
+  const handleSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newPwLoading) return;
     setNewPwError("");
     if (newPw.length < 6) {
       setNewPwError("Password must be at least 6 characters.");
@@ -264,10 +332,25 @@ export default function UserLogin() {
       setNewPwError("Passwords do not match.");
       return;
     }
-    // Simulate password reset success (replace with API call)
-    setForgotEmail("");
-    setView("login");
-    // Optionally show a success message
+    setNewPwLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, password: newPw, reset_token: resetToken }),
+      });
+      if (!response.ok) {
+        setNewPwError("Failed to reset password. Please try again.");
+        return;
+      }
+      setForgotEmail("");
+      setView("login");
+    } catch {
+      console.error("Error resetting password:", e);
+      setNewPwError("Unable to connect to the server. Please try again.");
+    } finally {
+      setNewPwLoading(false);
+    }
   };
 
   return (
