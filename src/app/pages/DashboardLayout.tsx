@@ -118,11 +118,6 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="p-4 border-t border-[#00432E]">
-          <button className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-white/80 hover:text-white hover:bg-[#00432E]/50 rounded-lg w-full transition-colors">
-            <Settings className="w-5 h-5" />
-            Settings
-          </button>
-
           {logoutMessage && (
             <div
               className={`mx-4 mb-2 rounded-lg px-3 py-2 text-xs font-medium ${

@@ -432,8 +432,8 @@ export default function UserDashboard() {
   const aiRiskScore = latestApplication?.riskScore ?? null;
 
   const loanOffers = [
-    { id: 1, title: "Personal Growth Loan", amount: "R 50,000", rate: "Prime + 2%", term: "24 Months", type: "Personal", icon: <CreditCard className="w-6 h-6 text-[#005B3F]" /> },
-    { id: 2, title: "SME Starter Pack",     amount: "R 150,000", rate: "Prime + 1.5%", term: "48 Months", type: "Business", icon: <Briefcase className="w-6 h-6 text-[#005B3F]" /> },
+    { id: 1, title: "Personal Growth Loan", amount: "R1,000 - R 49,000", rate: "Prime + 2%", term: "24 Months", type: "Personal", icon: <CreditCard className="w-6 h-6 text-[#005B3F]" /> },
+    { id: 2, title: "SME Starter Pack",     amount: "R150,00 - R 250,000", rate: "Prime + 1.5%", term: "48 Months", type: "Business", icon: <Briefcase className="w-6 h-6 text-[#005B3F]" /> },
   ];
 
   const hasActiveFilters = filterStatus !== "all" || filterDateFrom || filterDateTo || filterMinAmount || filterMaxAmount;
