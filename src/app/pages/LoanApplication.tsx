@@ -136,6 +136,10 @@ export default function LoanApplication() {
   // Watch ID number and date of birth for relationship validation
   const watchedIdNumber = watch("idNumber");
   const watchedDob = watch("dateOfBirth");
+    // Only ask for employer details if the applicant actually works
+  const employmentStatus = watch("employmentStatus");
+  const isSelfEmployed = employmentStatus === "self-employed";
+  const showWorkDetails = ["employed", "part-time", "contract", "self-employed"].includes(employmentStatus);
 
   const idDobMismatch = useMemo(() => {
     if (!watchedIdNumber || watchedIdNumber.length !== 13 || !watchedDob) return false;
@@ -228,11 +232,11 @@ export default function LoanApplication() {
         residential_status: data.residentialStatus,
 
         employment_status: data.employmentStatus,
-        employer_name: data.employerName,
-        employer_address: data.employerAddress,
-        occupation: data.occupation,
+        employer_name: showWorkDetails ? data.employerName : null,
+        employer_address: showWorkDetails ? data.employerAddress : null,
+        occupation: showWorkDetails ? data.occupation : null,
         monthly_income: parseFloat(data.monthlyIncome),
-        years_employed: parseFloat(data.yearsEmployed),
+        years_employed: showWorkDetails ? parseFloat(data.yearsEmployed) : null,
 
         loan_amount: parseFloat(data.loanAmount),
         loan_purpose: data.loanPurpose,
@@ -304,7 +308,9 @@ export default function LoanApplication() {
   const stepFields: Record<number, (keyof LoanFormData)[]> = {
     1: ["fullName", "idNumber", "dateOfBirth", "phoneNumber", "email", "maritalStatus", "dependents"],
     2: ["residentialAddress", "city", "province", "postalCode", "yearsAtAddress", "residentialStatus"],
-    3: ["employmentStatus", "employerName", "occupation", "employerAddress", "monthlyIncome", "yearsEmployed", "monthlyExpenses"],
+    3: showWorkDetails
+      ? ["employmentStatus", "employerName", "occupation", "employerAddress", "monthlyIncome", "yearsEmployed", "monthlyExpenses"]
+      : ["employmentStatus", "monthlyIncome", "monthlyExpenses"],
     4: ["loanAmount", "repaymentTerm", "loanType", "loanPurpose", "existingLoans"],
     5: ["bankName", "accountType", "accountNumber", "reference1Name", "reference1Phone", "reference1Relationship", "reference2Name", "reference2Phone", "reference2Relationship"],
   };
@@ -792,11 +798,11 @@ export default function LoanApplication() {
                       </p>
                     )}
                   </div>
-
+{showWorkDetails && (
                   <div className="grid sm:grid-cols-2 gap-6">
                     <div>
                       <Label htmlFor="employerName" className="text-gray-700 font-bold mb-2">
-                        Employer Name *
+                        {isSelfEmployed ? "Business Name *" : "Employer Name *"}
                       </Label>
                       <Input
                         id="employerName"
@@ -830,10 +836,11 @@ export default function LoanApplication() {
                       )}
                     </div>
                   </div>
-
+                  )}
+{showWorkDetails && (
                   <div>
-                    <Label htmlFor="employerAddress" className="text-gray-700 font-bold mb-2">
-                      Employer Address *
+                      <Label htmlFor="employerAddress" className="text-gray-700 font-bold mb-2">
+                      {isSelfEmployed ? "Business Address *" : "Employer Address *"}
                     </Label>
                     <Input
                       id="employerAddress"
@@ -850,6 +857,7 @@ export default function LoanApplication() {
                       </p>
                     )}
                   </div>
+)}
 
                   <div className="grid sm:grid-cols-2 gap-6">
                     <div>
@@ -871,7 +879,7 @@ export default function LoanApplication() {
                         </p>
                       )}
                     </div>
-
+{showWorkDetails && (
                     <div>
                       <Label htmlFor="yearsEmployed" className="text-gray-700 font-bold mb-2">
                         Years with Current Employer *
@@ -892,7 +900,8 @@ export default function LoanApplication() {
                         </p>
                       )}
                     </div>
-                  </div>
+)} 
+                 </div>
 
                   <div>
                     <Label htmlFor="monthlyExpenses" className="text-gray-700 font-bold mb-2">
