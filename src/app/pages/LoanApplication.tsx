@@ -1163,7 +1163,7 @@ export default function LoanApplication() {
                           {...register("reference1Name", {
                             required: "Reference name is required",
                           })}
-                          placeholder="e.g., John Doe"
+                          placeholder="e.g., Donald Green"
                           className="mt-1"
                         />
                         {errors.reference1Name && (
@@ -1231,7 +1231,7 @@ export default function LoanApplication() {
                           {...register("reference2Name", {
                             required: "Reference name is required",
                           })}
-                          placeholder="e.g., Jane Smith"
+                          placeholder="e.g., Victoria Grey"
                           className="mt-1"
                         />
                         {errors.reference2Name && (
