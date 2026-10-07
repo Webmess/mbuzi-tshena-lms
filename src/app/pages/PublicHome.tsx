@@ -25,8 +25,7 @@ export default function PublicHome() {
             
             <div className="hidden md:flex items-center gap-8 font-medium text-gray-600">
               <a href="#how-it-works" className="hover:text-[#005B3F] transition-colors">How it works</a>
-              <a href="#borrow" className="hover:text-[#005B3F] transition-colors">Borrow</a>
-              <a href="#invest" className="hover:text-[#005B3F] transition-colors">Invest</a>
+             
             </div>
 
             <div className="flex items-center gap-4">
@@ -78,16 +77,7 @@ export default function PublicHome() {
               </Link>
             </div>
             
-            <div className="mt-8 flex items-center gap-4 text-sm font-medium text-gray-500">
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className={`w-8 h-8 rounded-full border-2 border-[#F4F6F8] bg-gray-200 flex items-center justify-center overflow-hidden`}>
-                    <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" />
-                  </div>
-                ))}
-              </div>
-              <p>Trusted by over <strong className="text-[#111827]">50,000+</strong> users across the region</p>
-            </div>
+          
           </div>
           
           <div className="relative lg:h-[600px] w-full rounded-3xl overflow-hidden shadow-2xl group">
