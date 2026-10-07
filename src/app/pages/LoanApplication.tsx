@@ -35,6 +35,15 @@ const ALLOWED_FILE_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
+type DocType = "id_document" | "payslip" | "bank_statement" | "proof_of_residence" | "company_registration";
+
+const DOCUMENT_TYPES: { type: DocType; label: string; hint: string; selfEmployedOnly?: boolean; optional?: boolean }[] = [
+  { type: "id_document", label: "South African ID", hint: "Certified copy, front and back" },
+  { type: "payslip", label: "Latest payslip / proof of income", hint: "Most recent month (or grant / pension letter)" },
+  { type: "bank_statement", label: "Bank statements", hint: "Last 3 months in one PDF, showing your residential address (6 months if self-employed)" },
+  { type: "proof_of_residence", label: "Proof of residence", hint: "Only needed if your bank statement doesn't show your address", optional: true },
+  { type: "company_registration", label: "Company registration", hint: "CIPC registration document", selfEmployedOnly: true },
+];
 
 interface LoanFormData {
   fullName: string;
@@ -95,9 +104,10 @@ async function parseApiError(res: Response, fallback: string): Promise<string> {
   }
 }
 
-async function uploadDocument(applicationId: number, file: File) {
+async function uploadDocument(applicationId: number, file: File, docType: DocType) {
   const formData = new FormData();
   formData.append("file", file);
+formData.append("document_type", docType);
 
   const res = await fetch(`${API_URL}/api/documents/upload/${applicationId}`, {
     method: "POST",
@@ -122,7 +132,7 @@ function formatFileSize(bytes: number) {
 export default function LoanApplication() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [documents, setDocuments] = useState<Partial<Record<DocType, File>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
@@ -140,6 +150,9 @@ export default function LoanApplication() {
   const employmentStatus = watch("employmentStatus");
   const isSelfEmployed = employmentStatus === "self-employed";
   const showWorkDetails = ["employed", "part-time", "contract", "self-employed"].includes(employmentStatus);
+ // Which documents to show, and which of those must be uploaded
+  const visibleDocs = DOCUMENT_TYPES.filter((d) => !d.selfEmployedOnly || isSelfEmployed);
+  const requiredDocs = visibleDocs.filter((d) => !d.optional);
 
   const idDobMismatch = useMemo(() => {
     if (!watchedIdNumber || watchedIdNumber.length !== 13 || !watchedDob) return false;
@@ -168,39 +181,23 @@ export default function LoanApplication() {
     { number: 6, title: "Documents", icon: <FileText className="w-4 h-4" /> },
   ];
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
+    const handleFileSelect = (docType: DocType, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
 
-    const accepted: File[] = [];
-    let rejectedCount = 0;
-
-    Array.from(files).forEach((file) => {
-      const validType = ALLOWED_FILE_TYPES.includes(file.type);
-      const validSize = file.size <= MAX_FILE_SIZE_MB * 1024 * 1024;
-      if (validType && validSize) {
-        accepted.push(file);
-      } else {
-        rejectedCount += 1;
-      }
-    });
-
-    if (accepted.length > 0) {
-      setUploadedFiles((prev) => [...prev, ...accepted]);
-      toast.success(`${accepted.length} document(s) added`);
+    if (!ALLOWED_FILE_TYPES.includes(file.type) || file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      toast.error(`Only PDF, JPG, PNG, DOC, DOCX under ${MAX_FILE_SIZE_MB}MB are allowed`);
+      return;
     }
-    if (rejectedCount > 0) {
-      toast.error(
-        `${rejectedCount} file(s) skipped — only PDF, JPG, PNG, DOC, DOCX under ${MAX_FILE_SIZE_MB}MB are allowed`
-      );
-    }
-
-    // allow re-selecting the same file later
-    event.target.value = "";
+    setDocuments((prev) => ({ ...prev, [docType]: file }));
   };
-
-  const removeDocument = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+    const removeDocument = (docType: DocType) => {
+    setDocuments((prev) => {
+      const next = { ...prev };
+      delete next[docType];
+      return next;
+    });
     toast.info("Document removed");
   };
 
@@ -210,6 +207,12 @@ export default function LoanApplication() {
       toast.error("ID number and date of birth do not match. Please verify your details on Step 1.");
       setCurrentStep(1);
       window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+     // Don't allow submitting until every required document is uploaded
+    const missingDocs = requiredDocs.filter((d) => !documents[d.type]);
+    if (missingDocs.length > 0) {
+      toast.error(`Please upload: ${missingDocs.map((d) => d.label).join(", ")}`);
       return;
     }
 
@@ -282,9 +285,11 @@ export default function LoanApplication() {
 
       const application = await res.json();
 
-      if (uploadedFiles.length > 0) {
+      
+      const docsToUpload = visibleDocs.filter((d) => documents[d.type]);
+      if (docsToUpload.length > 0) {
         const results = await Promise.allSettled(
-          uploadedFiles.map((file) => uploadDocument(application.id, file))
+          docsToUpload.map((d) => uploadDocument(application.id, documents[d.type]!, d.type))
         );
         const failed = results.filter((r) => r.status === "rejected").length;
         if (failed > 0) {
@@ -1316,84 +1321,68 @@ export default function LoanApplication() {
                   </div>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-                    <div>
-                      <h3 className="font-bold text-blue-900 mb-2">Required Documents</h3>
-                      <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• Certified copy of South African ID</li>
-                        <li>• 3 Months recent bank statements</li>
-                        <li>• Latest payslip or proof of income</li>
-                        <li>• Proof of residence (utility bill not older than 3 months)</li>
-                        <li>• For self-employed: 6 months bank statements + company registration</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#005B3F] transition-colors">
-                  <div className="w-16 h-16 bg-[#F4F6F8] rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Upload className="w-8 h-8 text-[#005B3F]" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 mb-2">Upload Documents</h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    Drag and drop files here, or click to browse
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label htmlFor="file-upload">
-                    <Button
-                      type="button"
-                      className="bg-[#005B3F] hover:bg-[#00432E] text-white cursor-pointer"
-                      asChild
-                    >
-                      <span>Select Files</span>
-                    </Button>
-                  </label>
-                  <p className="text-xs text-gray-400 mt-3">
-                    Accepted formats: PDF, JPG, PNG, DOC, DOCX (Max {MAX_FILE_SIZE_MB}MB per file)
-                  </p>
-                </div>
-
-                {uploadedFiles.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-bold text-gray-900">
-                      Selected Documents ({uploadedFiles.length})
-                    </h3>
-                    {uploadedFiles.map((file, index) => (
+                <div className="space-y-4">
+                  {visibleDocs.map((doc) => {
+                    const file = documents[doc.type];
+                    return (
                       <div
-                        key={`${file.name}-${index}`}
-                        className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-4"
+                        key={doc.type}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 rounded-xl p-4 transition-colors ${
+                          file ? "border-[#B4D330] bg-[#B4D330]/10" : "border-dashed border-gray-300"
+                        }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-[#B4D330]/20 rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-[#005B3F]" />
+                          <div className="w-10 h-10 bg-[#F4F6F8] rounded-lg flex items-center justify-center shrink-0">
+                            {file ? (
+                              <CheckCircle2 className="w-5 h-5 text-[#005B3F]" />
+                            ) : (
+                              <FileText className="w-5 h-5 text-[#005B3F]" />
+                            )}
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900 text-sm">{file.name}</p>
+                            <p className="font-bold text-gray-900 text-sm">
+                              {doc.label} {doc.optional ? <span className="font-normal text-gray-500">(optional)</span> : "*"}
+                            </p>
                             <p className="text-xs text-gray-500">
-                              {formatFileSize(file.size)} · will upload on submit
+                              {file ? `${file.name} · ${formatFileSize(file.size)}` : doc.hint}
                             </p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeDocument(index)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
-                        >
-                          Remove
-                        </button>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            onChange={(e) => handleFileSelect(doc.type, e)}
+                            className="hidden"
+                            id={`upload-${doc.type}`}
+                          />
+                          <label htmlFor={`upload-${doc.type}`}>
+                            <Button type="button" variant="outline" className="cursor-pointer" asChild>
+                              <span>
+                                <Upload className="w-4 h-4 mr-2" />
+                                {file ? "Replace" : "Upload"}
+                              </span>
+                            </Button>
+                          </label>
+                          {file && (
+                            <button
+                              type="button"
+                              onClick={() => removeDocument(doc.type)}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+
+                  <p className="text-xs text-gray-400">
+                    Accepted formats: PDF, JPG, PNG, DOC, DOCX (Max {MAX_FILE_SIZE_MB}MB per file)
+                  </p>
+                </div>
               </div>
             )}
           </div>
