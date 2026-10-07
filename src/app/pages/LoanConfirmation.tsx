@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { 
   CheckCircle2, 
   Clock, 
@@ -15,9 +15,10 @@ import { Button } from "../components/ui/button";
 
 export default function LoanConfirmation() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const applicationDetails = {
-    referenceNumber: "LN" + Math.random().toString(36).substr(2, 9).toUpperCase(),
+    referenceNumber: location.state?.referenceNumber ?? "Not available",
     submittedDate: new Date().toLocaleDateString('en-ZA', { 
       year: 'numeric', 
       month: 'long', 
@@ -29,6 +30,30 @@ export default function LoanConfirmation() {
     }),
   };
 
+
+   const downloadReceipt = () => {
+    const receipt = window.open("", "_blank", "width=600,height=700");
+    if (!receipt) return;
+    receipt.document.write(`
+      <html>
+        <head><title>Receipt ${applicationDetails.referenceNumber}</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 40px;">
+          <h1 style="color: #005B3F;">Mbudzi Tshena Financial Solutions</h1>
+          <h2>Loan Application Receipt</h2>
+          <p><b>Reference Number:</b> ${applicationDetails.referenceNumber}</p>
+          <p><b>Submitted Date:</b> ${applicationDetails.submittedDate}</p>
+          <p><b>Submitted Time:</b> ${applicationDetails.submittedTime}</p>
+          <p><b>Status:</b> Received, under review</p>
+          <p style="margin-top: 30px; font-size: 12px; color: #6b7280;">
+            Keep this reference number to track your application.
+            Questions? Call 0800 123 456 or email loans@mbudzitshena.co.za
+          </p>
+        </body>
+      </html>
+    `);
+    receipt.document.close();
+    receipt.print();
+  };
   const nextSteps = [
     {
       icon: <FileText className="w-6 h-6" />,
@@ -104,7 +129,7 @@ export default function LoanConfirmation() {
               <h2 className="text-2xl font-bold text-[#005B3F] mb-2">Application Details</h2>
               <p className="text-gray-600">Please save your reference number for tracking</p>
             </div>
-            <Button className="bg-[#005B3F] hover:bg-[#00432E] text-white">
+             <Button onClick={downloadReceipt} className="bg-[#005B3F] hover:bg-[#00432E] text-white">
               <Download className="w-4 h-4 mr-2" />
               Download Receipt
             </Button>
