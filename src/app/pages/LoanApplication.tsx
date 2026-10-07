@@ -130,6 +130,7 @@ export default function LoanApplication() {
     handleSubmit,
     formState: { errors },
     watch,
+    trigger,
   } = useForm<LoanFormData>();
 
   // Watch ID number and date of birth for relationship validation
@@ -299,8 +300,17 @@ export default function LoanApplication() {
       setIsSubmitting(false);
     }
   };
-
-  const nextStep = () => {
+    // Fields that must be valid before leaving each step
+  const stepFields: Record<number, (keyof LoanFormData)[]> = {
+    1: ["fullName", "idNumber", "dateOfBirth", "phoneNumber", "email", "maritalStatus", "dependents"],
+    2: ["residentialAddress", "city", "province", "postalCode", "yearsAtAddress", "residentialStatus"],
+    3: ["employmentStatus", "employerName", "occupation", "employerAddress", "monthlyIncome", "yearsEmployed", "monthlyExpenses"],
+    4: ["loanAmount", "repaymentTerm", "loanType", "loanPurpose", "existingLoans"],
+    5: ["bankName", "accountType", "accountNumber", "reference1Name", "reference1Phone", "reference1Relationship", "reference2Name", "reference2Phone", "reference2Relationship"],
+  };
+   const nextStep = async () => {
+    const isValid = await trigger(stepFields[currentStep]);
+    if (!isValid) return; // stay on this step; the red error messages will show
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
