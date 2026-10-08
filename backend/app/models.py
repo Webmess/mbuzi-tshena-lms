@@ -286,3 +286,27 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", backref="notifications")
+
+
+class ProofStatus(str, enum.Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class ProofOfPayment(Base):
+    __tablename__ = "proofs_of_payment"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    proof_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    application_id: Mapped[int] = mapped_column(Integer, ForeignKey("loan_applications.id"), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[ProofStatus] = mapped_column(SAEnum(ProofStatus), default=ProofStatus.PENDING)
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+    application: Mapped["LoanApplication"] = relationship("LoanApplication")

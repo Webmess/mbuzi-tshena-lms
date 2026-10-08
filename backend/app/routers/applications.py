@@ -19,6 +19,7 @@ from app.schemas import (
 from app.auth import get_current_user, get_current_admin, get_current_active_borrower
 from app.utils.risk_score import compute_risk_score, format_currency, relative_date
 from app.utils.email import send_application_confirmation
+from app.config import settings
 
 from app.model.run import LoanPredictionModel
 
@@ -38,6 +39,17 @@ def generate_loan_number() -> str:
     return "LN-" + "".join(secrets.choice(alphabet) for _ in range(8))
 
 
+def count_open_loans(db: Session, user_id: int) -> int:
+    apps = db.query(LoanApplication).filter(LoanApplication.user_id == user_id).all()
+    count = 0
+    for a in apps:
+        if a.status in (ApplicationStatus.PENDING, ApplicationStatus.UNDER_REVIEW):
+            count += 1
+        elif a.status in (ApplicationStatus.APPROVED, ApplicationStatus.DISBURSED):
+            if not (a.loan and a.loan.status == "Paid Off"):
+                count += 1
+    return count
+
 @router.post("", response_model=LoanApplicationOut, status_code=status.HTTP_201_CREATED)
 async def create_application(
     data: LoanApplicationCreate,
@@ -45,6 +57,11 @@ async def create_application(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_borrower),
 ):
+    if count_open_loans(db, current_user.id) >= settings.MAX_OPEN_LOANS:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have 2 open loans. Please pay one off before applying again.",
+        )
     # Generate unique reference
     ref = generate_reference()
     while db.query(LoanApplication).filter(LoanApplication.reference_number == ref).first():
@@ -131,7 +148,7 @@ async def create_application(
         alert = FraudAlert(
             alert_id=f"FA-{secrets.token_hex(4).upper()}",
             application_id=app.id,
-            reason=f"High AI risk score ({risk_score}) – {AIAction}",
+            reason=f"High AI risk score ({risk_score}) – {ai_action.value}",
             risk_score=risk_score,
         )
         db.add(alert)
@@ -148,7 +165,10 @@ async def create_application(
 
     return app
 
-
+@router.get("/me/eligibility")
+def my_eligibility(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    open_count = count_open_loans(db, current_user.id)
+    return {"can_apply": open_count < settings.MAX_OPEN_LOANS, "open_loans": open_count}
 @router.get("/me", response_model=List[LoanApplicationOut])
 def my_applications(
     db: Session = Depends(get_db),

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, date
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
@@ -188,3 +188,41 @@ def list_borrowers(
         page_size=page_size,
         pages=pages,
     )
+
+@router.get("/alerts")
+def list_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+     rows = (
+        db.query(FraudAlert, LoanApplication)
+        .outerjoin(LoanApplication, FraudAlert.application_id == LoanApplication.id)
+        .order_by(FraudAlert.created_at.desc())
+        .all()
+    )
+     return [
+        {
+            "id": a.alert_id,
+            "type": "Fraud Suspicion" if a.risk_score >= 80 else "High Risk",
+            "relatedId": app.reference_number if app else "—",
+            "relatedUser": app.full_name if app else "Unknown applicant",
+            "dateTime": a.created_at.strftime("%Y-%m-%d %H:%M"),
+            "description": a.reason,
+            "status": "resolved" if a.is_resolved else "unresolved",
+            "read": a.is_resolved,
+        }
+        for a, app in rows
+    ]
+
+@router.patch("/alerts/{alert_id}")
+def toggle_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    alert = db.query(FraudAlert).filter(FraudAlert.alert_id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    alert.is_resolved = not alert.is_resolved
+    db.commit()
+    return {"status": "resolved" if alert.is_resolved else "unresolved"}
