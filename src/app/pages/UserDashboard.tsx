@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router";
 import {
   Bell, LogOut, CheckCircle2, ArrowRight, Activity, Wallet, PieChart, TrendingUp,
   CreditCard, Briefcase, Filter, X, Upload, FileText, Clock, XCircle, Megaphone,
-  Info, AlertCircle, Loader2
+  Info, AlertCircle, Loader2, Eye
 } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "../components/Logo";
@@ -426,16 +426,19 @@ export default function UserDashboard() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const [proofUploads, setProofUploads] = useState<Record<string, string>>({});
+  const [proofUploads, setProofUploads] = useState<Record<string, { id: string; file_name: string; status: string; admin_notes: string | null }[]>>({});
   useEffect(() => {
    if (!user) return;
     fetch(`${import.meta.env.VITE_API_URL}/api/proofs/me`, { credentials: "include" })
       .then(res => res.ok ? res.json() : [])
       .then((proofs: any[]) => {
-        const map: Record<string, string> = {};
-        proofs.forEach(p => { map[p.loan_reference] = p.file_name; });
-        setProofUploads(map);
-      });
+        const map: Record<string, { id: string; file_name: string; status: string; admin_notes: string | null }[]> = {};
+        proofs.forEach(p => {
+          if (!map[p.loan_reference]) map[p.loan_reference] = [];
+          map[p.loan_reference].push({ id: p.id, file_name: p.file_name, status: p.status, admin_notes: p.admin_notes });
+        });
+        setProofUploads(map);     
+      });                          
   }, [user]);
 
   const latestApplication = loanHistory.length > 0 ? loanHistory[0] : null;
@@ -477,8 +480,17 @@ export default function UserDashboard() {
       credentials: "include",
       body: form,
     });
-  if (res.ok) setProofUploads(prev => ({ ...prev, [loanId]: file.name }));
-    else alert("Upload failed");
+  if (res.ok) {
+  const proof = await res.json();
+  setProofUploads(prev => ({ ...prev, [loanId]: [{ id: proof.id, file_name: proof.file_name, status: proof.status, admin_notes: proof.admin_notes }, ...(prev[loanId] ?? [])] }));
+}
+else alert("Upload failed");};
+
+  const handleViewProof = async (proofId: string) => {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/proofs/${proofId}/file`, { credentials: "include" });
+  if (!res.ok) { alert("Could not open file"); return; }
+  const blob = await res.blob();
+  window.open(URL.createObjectURL(blob), "_blank");
   };
 
   // ─── Loading state ────────────────────────────────────────────
@@ -930,7 +942,8 @@ export default function UserDashboard() {
             ) : (
               filteredHistory.map(loan => {
                 const cfg = statusConfig[loan.status];
-                const proofFile = proofUploads[loan.id];
+                const loanProofs = proofUploads[loan.id] ?? [];
+                const proofFile = loanProofs[0];
                 const canUploadProof = loan.status === "approved" || loan.status === "repaid";
 
                 return (
@@ -979,10 +992,12 @@ export default function UserDashboard() {
 
                       {/* Proof of payment */}
                       <div className="shrink-0">
-                        {proofFile ? (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E5F2D9] text-[#005B3F] rounded-lg text-xs font-bold border border-[#B4D330]/30">
+                        {proofFile && proofFile.status !== "rejected" ? (
+                          <div className="flex items-center gap-2">
+                           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E5F2D9] text-[#005B3F] rounded-lg text-xs font-bold border border-[#B4D330]/30">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            Proof Uploaded
+                             Proof Uploaded
+                           </div>
                           </div>
                         ) : canUploadProof ? (
                           <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-[#005B3F] text-[#005B3F] rounded-lg text-xs font-bold cursor-pointer hover:bg-[#005B3F] hover:text-white transition-colors">
@@ -1004,11 +1019,23 @@ export default function UserDashboard() {
                       </div>
                     </div>
 
-                    {proofFile && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500">
-                        <FileText className="w-3.5 h-3.5 text-[#005B3F]" />
-                        <span className="font-medium text-[#005B3F]">{proofFile}</span>
-                        <span className="text-gray-400">— uploaded successfully</span>
+                    {loanProofs.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                        {loanProofs.map(p => (
+                          <div key={p.id} className="text-xs text-gray-500">
+                              <FileText className="w-3.5 h-3.5 text-[#005B3F]" />
+                              <span className="font-medium text-[#005B3F]">{p.file_name}</span>
+                              <span className={p.status === "rejected" ? "text-red-600 font-bold" : p.status === "verified" ? "text-[#005B3F] font-bold" : "text-gray-400"}>
+                                — {p.status}
+                                </span>
+                              <button onClick={() => handleViewProof(p.id)} className="ml-auto inline-flex items-center gap-1 text-[#005B3F] font-bold hover:underline">
+                                <Eye className="w-3.5 h-3.5" /> View
+                              </button>
+                            {p.status === "rejected" && (
+                              <p className="ml-5 mt-1 text-red-600">Reason: {p.admin_notes || "No reason given"}</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
