@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import {
   Search, Filter, ShieldCheck, ShieldAlert, Clock, ChevronRight,
   X, FileText, User, DollarSign, Calendar, Briefcase, AlertCircle,
-  CheckCircle2, XCircle, RotateCcw, TrendingUp
+  CheckCircle2, XCircle, RotateCcw, TrendingUp, Eye
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -46,7 +46,7 @@ interface LoanRequestDetail extends LoanRequestListItem {
   accountType: string;
   repaymentProbability: number;
   aiExplanation: string;
-  documents: string[];
+  documents: { id: number; original_filename: string; document_type: string | null }[];
   decisionReason: string;
   overrideHistory: { status: string; comment: string; by: string; at: string } | null;
   amountValue: number;
@@ -309,7 +309,22 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
                   <div className="w-8 h-8 bg-[#E5F2D9] rounded-lg flex items-center justify-center shrink-0">
                     <FileText className="w-4 h-4 text-[#005B3F]" />
                   </div>
-                  <span className="text-sm font-medium text-gray-800">{doc}</span>
+                  <span className="text-sm font-medium text-gray-800">{doc.original_filename}</span>
+                  {doc.document_type && (
+                    <span className="text-xs text-gray-500">({doc.document_type.replace(/_/g, " ")})</span>
+                  )}
+                  <button
+                    title="View document"
+                    onClick={async () => {
+                      const res = await fetch(`${API_URL}/api/documents/${doc.id}/file`, { credentials: "include" });
+                      if (!res.ok) { alert("Could not open document"); return; }
+                      const blob = await res.blob();
+                      window.open(URL.createObjectURL(blob), "_blank");
+                    }}
+                    className="ml-auto p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
