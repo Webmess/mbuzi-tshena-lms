@@ -38,6 +38,7 @@ python-jose==3.3.0
 python-multipart==0.0.20
 PyYAML==6.0.3
 rapidfuzz==3.14.6
+rapidocr-onnxruntime==1.2.3
 rsa==4.9.1
 scikit-learn==1.6.1
 scipy==1.18.1
