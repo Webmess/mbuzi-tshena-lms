@@ -12,7 +12,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 // Matches NotificationOut returned by GET /api/notifications/me
 interface ApiNotification {
   id: number;
-  type: "proof_accepted" | "proof_rejected" | "loan_approved" | "loan_rejected";
+  type: "proof_accepted" | "proof_rejected" | "loan_approved" | "loan_rejected" | "investment_approved" | "investment_rejected";
   message: string;
   read: boolean;
   created_at: string;
@@ -70,7 +70,7 @@ interface InvestorFormData {
   agreedAt: string;
 }
 
-function InvestorModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: InvestorFormData) => void }) {
+function InvestorModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: InvestorFormData) => Promise<boolean> }) {
   const [amount, setAmount]     = useState("");
   const [duration, setDuration] = useState("12");
   const [risk, setRisk]         = useState("Moderate");
@@ -85,11 +85,12 @@ function InvestorModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     return e;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
-    onSubmit({ amount: Number(amount), duration: Number(duration), risk, agreedAt: new Date().toISOString() });
-    setSubmitted(true);
+    const ok = await onSubmit({ amount: Number(amount), duration: Number(duration), risk, agreedAt: new Date().toISOString() });
+    if (ok) setSubmitted(true);
+    else setErrors({ amount: "Could not submit your request. Please try again." });
   };
 
   return (
@@ -384,21 +385,36 @@ export default function UserDashboard() {
     }).catch(err => console.error("Failed to mark notifications as read:", err));
   };
 
-  // ─── Investor modal / "Total Invested" ──────────────────────────
-  // NOTE: there is no investments backend/model, so this total only
-  // reflects requests submitted in this browser session — it resets
-  // on reload and isn't shared across devices. Add an investments
-  // table + endpoint (e.g. GET /api/investments/me) to make this durable.
+   // ─── Investor modal / "Total Invested" ──────────────────────────
   const [showInvestorModal, setShowInvestorModal] = useState(false);
-  const [investorRequests, setInvestorRequests] = useState<InvestorFormData[]>([]);
+  const [investments, setInvestments] = useState<{ id: string; amount: number; status: string }[]>([]);
 
-  const handleInvestorSubmit = (data: InvestorFormData) => {
-    setInvestorRequests(prev => [...prev, data]);
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${import.meta.env.VITE_API_URL}/api/investments/me`, { credentials: "include" })
+      .then(res => res.ok ? res.json() : [])
+      .then(setInvestments);
+  }, [user]);
+
+  const handleInvestorSubmit = async (data: InvestorFormData) => {
+   const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: data.amount, duration_months: data.duration, risk_level: data.risk }),
+    });
+    if (!res.ok) return false;
+    const inv = await res.json();
+    setInvestments(prev => [inv, ...prev]);
+    return true;
   };
-
   const totalInvested = useMemo(
-    () => investorRequests.reduce((sum, r) => sum + r.amount, 0),
-    [investorRequests]
+    () => investments.filter(i => i.status === "approved").reduce((sum, i) => sum + i.amount, 0),
+    [investments]
+  );
+  const pendingInvested = useMemo(
+    () => investments.filter(i => i.status === "pending").reduce((sum, i) => sum + i.amount, 0),
+    [investments]
   );
 
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -548,8 +564,8 @@ else alert("Upload failed");};
                         notifications.map(n => (
                           <div key={n.id} className={clsx("px-4 py-3 flex items-start gap-3", !n.read ? "bg-[#E5F2D9]/50" : "bg-white")}>
                             <div className={clsx("w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                              n.type === "proof_accepted" || n.type === "loan_approved" ? "bg-[#E5F2D9] text-[#005B3F]" : "bg-red-50 text-red-600")}>
-                              {n.type === "proof_accepted" || n.type === "loan_approved"
+                               n.type === "proof_accepted" || n.type === "loan_approved" || n.type === "investment_approved" ? "bg-[#E5F2D9] text-[#005B3F]" : "bg-red-50 text-red-600")}>
+                              {n.type === "proof_accepted" || n.type === "loan_approved" || n.type === "investment_approved"
                                 ? <CheckCircle2 className="w-4 h-4" />
                                 : <XCircle className="w-4 h-4" />}
                             </div>
@@ -802,6 +818,9 @@ else alert("Upload failed");};
                   <div>
                     <div className="text-xs font-medium text-gray-500">Total Invested</div>
                     <div className="text-sm font-bold text-gray-900">{formatCurrency(totalInvested)}</div>
+                    {pendingInvested > 0 && (
+                      <div className="text-xs text-amber-600 font-medium">+ {formatCurrency(pendingInvested)} pending</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1049,7 +1068,7 @@ else alert("Upload failed");};
       {showInvestorModal && (
         <InvestorModal
           onClose={() => setShowInvestorModal(false)}
-          onSubmit={data => { handleInvestorSubmit(data); }}
+          onSubmit={handleInvestorSubmit}
         />
       )}
     </div>
