@@ -59,10 +59,7 @@ export const router = createBrowserRouter([
         path: "admin/login",
         Component: AdminLogin,
       },
-      {
-        path: "dashboard",
-        Component: UserDashboard,
-      },
+      
       {
         path: "apply",
         Component: LoanApplication,
