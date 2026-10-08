@@ -18,6 +18,7 @@ from app.schemas import (
 )
 from app.auth import get_current_user, get_current_admin, get_current_active_borrower
 from app.utils.risk_score import compute_risk_score, format_currency, relative_date
+from app.utils.sa_id import sa_id_matches_dob
 from app.utils.email import send_application_confirmation
 from app.config import settings
 
@@ -62,6 +63,8 @@ async def create_application(
             status_code=400,
             detail="You already have 2 open loans. Please pay one off before applying again.",
         )
+    if not sa_id_matches_dob(data.id_number, data.date_of_birth):
+        raise HTTPException(status_code=400, detail="ID number and date of birth do not match.")
     # Generate unique reference
     ref = generate_reference()
     while db.query(LoanApplication).filter(LoanApplication.reference_number == ref).first():

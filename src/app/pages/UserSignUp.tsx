@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Logo, LogoIcon } from "../components/Logo";
+import { isValidSaId } from "../utils/saId";
 import clsx from "clsx";
 
 const API_URL = "http://localhost:8000/api/auth";
@@ -182,6 +183,7 @@ export default function UserSignUp() {
     if (!trimmedEmail) return setError("Please enter your email address.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) return setError("Enter a valid email address.");
     if (!trimmedIdNumber) return setError("Please enter your ID number.");
+    if (!isValidSaId(trimmedIdNumber)) return setError("This is not a valid South African ID number.");
     if (!trimmedPhoneNumber) return setError("Please enter your phone number.");
     if (password.length < 8) return setError("Your password must be at least 8 characters long.");
     if (password !== confirmPassword) return setError("Passwords do not match.");
