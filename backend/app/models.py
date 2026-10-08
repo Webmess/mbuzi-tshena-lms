@@ -255,7 +255,14 @@ class Document(Base):
 
     application: Mapped["LoanApplication"] = relationship("LoanApplication", back_populates="documents")
 
+class DocumentCheck(Base):
+    __tablename__ = "document_checks"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    document_id: Mapped[int] = mapped_column(Integer, ForeignKey("documents.id"), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # passed / mismatch / unreadable / skipped
+    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 class FraudAlert(Base):
     __tablename__ = "fraud_alerts"
 
