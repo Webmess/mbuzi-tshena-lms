@@ -2,7 +2,9 @@ import re
 import secrets
 from datetime import date
 
+import numpy as np
 import pdfplumber
+from rapidocr_onnxruntime import RapidOCR
 from rapidfuzz import fuzz, process
 
 from app.database import SessionLocal
@@ -18,13 +20,30 @@ DOC_LABELS = {
     "proof_of_residence": "Proof of residence",
 }
 
-# ---------- 1. Get the text out of the file ----------
+_ocr = None
+
+def ocr_image(image) -> str:
+    """Read text from a photo or scan. The OCR model loads on first use (a few seconds)."""
+    global _ocr
+    if _ocr is None:
+        _ocr = RapidOCR()
+    result, _ = _ocr(image)
+    return "\n".join(line[1] for line in result or [])
 
 def extract_text(file_path: str, content_type: str) -> str:
     if content_type == "application/pdf":
         with pdfplumber.open(file_path) as pdf:
-            return "\n".join(page.extract_text() or "" for page in pdf.pages)
-    return ""  # images are read with OCR in Phase 3
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            if len(text.strip()) >= 20:
+                return text
+            # No text inside: it's a scanned PDF, so OCR each page as an image
+            return "\n".join(
+                ocr_image(np.array(page.to_image(resolution=200).original))
+                for page in pdf.pages
+            )
+    if content_type in ("image/jpeg", "image/jpg", "image/png"):
+        return ocr_image(file_path)
+    return ""
 
 # ---------- 2. Small helpers to find and compare details ----------
 
@@ -35,24 +54,33 @@ def words_found(expected: str, text: str) -> bool:
     if not words:
         return True
     text_words = re.findall(r"[a-z0-9]+", text.lower())
+    squashed = "".join(text_words)  # OCR sometimes joins words: "THANDIWEGRACE"
     found = sum(
         1 for w in words
-        if process.extractOne(w, text_words, scorer=fuzz.ratio, score_cutoff=85)
+        if w in squashed
+        or process.extractOne(w, text_words, scorer=fuzz.ratio, score_cutoff=85)
     )
     return found / len(words) >= 0.66
 
 def find_amount_after(label: str, text: str):
-    match = re.search(label + r"\D{0,15}(\d[\d ,]*\.\d{2})", text, re.IGNORECASE)
-    if not match:
-        return None
-    return float(match.group(1).replace(" ", "").replace(",", ""))
+    amount = r"(?P<amount>\d[\d ,]*\.\d{2})"
+    gap = r"(?P<gap>\D{0,15}?)"
+    # The amount usually follows its label, but OCR may put it before: "R 18 500.00 Net Pay"
+    for pattern in (label + gap + amount, amount + gap + label):
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            # Skip it if a real word sits in between, e.g. "Gross Pay DEDUCTIONS R3744.00"
+            if not re.search(r"[A-Za-z]{3,}", match.group("gap")):
+                return float(match.group("amount").replace(" ", "").replace(",", ""))
+    return None
 
 def latest_date(text: str):
     found = []
-    for day, month, year in re.findall(r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})", text):
-        if month.lower() in MONTHS:
+    short_months = [m[:3] for m in MONTHS]
+    # matches "15 September 2026", "15 Sep 2026" and OCR's "15Sep2026"
+    for day, month, year in re.findall(r"(\d{1,2})\s*([A-Za-z]{3,9})\s*(\d{4})", text):
+        if month[:3].lower() in short_months:
             try:
-                found.append(date(int(year), MONTHS.index(month.lower()) + 1, int(day)))
+                found.append(date(int(year), short_months.index(month[:3].lower()) + 1, int(day)))
             except ValueError:
                 pass
     return max(found) if found else None
@@ -73,12 +101,17 @@ def check_payslip(text, app):
         problems.append("Name on the payslip does not match the application")
     if app.employer_name and not words_found(app.employer_name, text):
         problems.append("Employer on the payslip does not match the application")
-    net_pay = find_amount_after("net pay", text)
     income = float(app.monthly_income)
-    if net_pay is None:
-        problems.append("Could not find the net pay on the payslip")
-    elif abs(net_pay - income) > income * 0.10:
-        problems.append(f"Net pay R{net_pay:,.2f} differs from stated income R{income:,.2f} by more than 10%")
+    pay = {
+        "net pay": find_amount_after("net pay", text),
+        "gross pay": find_amount_after("gross pay", text),
+    }
+    pay = {label: amount for label, amount in pay.items() if amount is not None}
+    if not pay:
+        problems.append("Could not find the net or gross pay on the payslip")
+    elif all(abs(amount - income) > income * 0.10 for amount in pay.values()):
+        found = ", ".join(f"{label} R{amount:,.2f}" for label, amount in pay.items())
+        problems.append(f"Stated income R{income:,.2f} does not match the payslip ({found}) within 10%")
     return problems
 
 def check_bank_statement(text, app):
