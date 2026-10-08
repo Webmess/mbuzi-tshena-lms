@@ -107,15 +107,17 @@ def format_currency(amount: float) -> str:
 
 
 def relative_date(dt) -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
+    sast = timezone(timedelta(hours=2))  # South Africa time (no daylight saving)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
-    delta = now - dt
-    if delta.days == 0:
+    dt = dt.astimezone(sast)
+    today = datetime.now(sast).date()
+    days_ago = (today - dt.date()).days
+    if days_ago == 0:
         return f"Today, {dt.strftime('%H:%M')}"
-    if delta.days == 1:
+    if days_ago == 1:
         return f"Yesterday, {dt.strftime('%H:%M')}"
-    if delta.days < 7:
+    if days_ago < 7:
         return dt.strftime("%a, %H:%M")
     return dt.strftime("%d %b %Y")

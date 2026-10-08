@@ -14,7 +14,7 @@ from app.schemas import (
     UserOut, PaginatedResponse
 )
 from app.auth import get_current_admin
-from app.utils.risk_score import relative_date
+from app.utils.risk_score import relative_date, format_currency
 from fastapi import Query
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -179,7 +179,27 @@ def list_borrowers(
         .all()
     )
 
-    items = [UserOut.model_validate(u) for u in users]
+    items = [
+        {
+            "id": u.id,
+            "name": u.full_name,
+            "email": u.email,
+            "id_number": u.id_number,
+            "phone": u.phone_number,
+            "joined": relative_date(u.created_at),
+            "loans": [
+                {
+                    "reference": a.reference_number,
+                    "amount": format_currency(float(a.loan_amount)),
+                    "loan_type": a.loan_type,
+                    "status": a.status.value,
+                    "score": a.ai_risk_score or 0,
+                }
+                for a in u.applications
+            ],
+        }
+        for u in users
+    ]
     pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
         items=items,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Search, CheckCircle2, XCircle, Clock, FileImage, FileText, Eye } from "lucide-react";
 import clsx from "clsx";
 
@@ -65,6 +65,11 @@ export default function ProofOfPayments() {
       (filterStatus === "Rejected" && p.status === "rejected");
     return matchesSearch && matchesStatus;
   });
+  const groups = filtered.reduce<Record<string, ProofRecord[]>>((acc, p) => {
+    if (!acc[p.userId]) acc[p.userId] = [];
+    acc[p.userId].push(p);
+    return acc;
+  }, {});
 
   const counts = {
     total:    proofs.length,
@@ -149,16 +154,21 @@ export default function ProofOfPayments() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(proof => {
+                Object.entries(groups).map(([email, userProofs]) => (
+                  <Fragment key={email}>
+                    <tr className="bg-gray-50/70">
+                      <td colSpan={6} className="px-6 py-3">
+                        <span className="font-bold text-[#111827] text-sm">{userProofs[0].userName}</span>
+                        <span className="text-xs text-gray-500 font-medium ml-2">{email}</span>
+                        <span className="text-xs text-gray-400 ml-2">· {userProofs.length} proof{userProofs.length !== 1 ? "s" : ""}</span>
+                      </td>
+                    </tr>
+                    {userProofs.map(proof => {
                   const cfg = statusConfig[proof.status];
                   return (
                     <tr key={proof.id} className="hover:bg-[#F4F6F8] transition-colors">
                       {/* Borrower */}
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-[#111827] text-sm">{proof.userName}</div>
-                        <div className="text-xs text-gray-500 mt-0.5 font-medium">{proof.userId}</div>
-                      </td>
-
+                      <td className="px-6 py-4" />
                       {/* File preview thumbnail */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -242,7 +252,9 @@ export default function ProofOfPayments() {
                       </td>
                     </tr>
                   );
-                })
+                  })}
+                  </Fragment>
+                ))
               )}
             </tbody>
           </table>

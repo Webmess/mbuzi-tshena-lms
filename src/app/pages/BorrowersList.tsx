@@ -2,28 +2,35 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { Users, Search, Filter, X } from "lucide-react";
 import clsx from "clsx";
 
+interface BorrowerLoan {
+  reference: string;
+  amount: string;
+  loanType: string;
+  status: string;
+  score: number;
+}
 interface Borrower {
   id: string;
   name: string;
+  email: string;
   idNumber: string;
   phone: string;
-  riskScore: number;
-  loanAmount: string;
-  amountValue: number;
-  loanType: string;
-  status: "Active" | "Repaid" | "Overdue" | "—";
   joinedDate: string;
+  loans: BorrowerLoan[];
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const STATUS_OPTIONS = ["All", "Active", "Repaid", "Overdue"];
-const LOAN_TYPE_OPTIONS = ["All", "Personal Loan", "Business Loan", "Education Loan", "Emergency Loan", "Home Improvement"];
+const STATUS_OPTIONS = ["All", "Pending", "Under Review", "Approved", "Rejected", "Disbursed", "Closed"];
+const LOAN_TYPE_OPTIONS = ["All", "personal", "business", "education", "home-improvement", "debt-consolidation", "emergency"];
 
 const statusStyles: Record<string, string> = {
-  Active: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30",
-  Repaid: "bg-blue-50 text-blue-700 border-blue-100",
-  Overdue: "bg-red-50 text-red-700 border-red-100",
+  Pending: "bg-amber-50 text-amber-700 border-amber-100",
+  "Under Review": "bg-amber-50 text-amber-700 border-amber-100",
+  Approved: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30",
+  Rejected: "bg-red-50 text-red-700 border-red-100",
+  Disbursed: "bg-blue-50 text-blue-700 border-blue-100",
+  Closed: "bg-gray-50 text-gray-500 border-gray-100",
   "—": "bg-gray-50 text-gray-400 border-gray-100",
 };
 
@@ -47,24 +54,27 @@ export default function BorrowersList() {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch(`${API_URL}/api/applications`, {
+        const res = await fetch(`${API_URL}/api/admin/borrowers?page_size=100`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to load borrowers");
         const data = await res.json();
 
         // Map API response to the table format. Missing fields become placeholders.
-        const mapped: Borrower[] = (data.items ?? []).map((item: any, index: number) => ({
-          id: String(item.id ?? `USR-${index + 1}`),
+        const mapped: Borrower[] = (data.items ?? []).map((item: any) => ({
+          id: String(item.id),
           name: item.name ?? "Unknown",
+          email: item.email ?? "",
           idNumber: item.id_number ?? "—",
           phone: item.phone ?? "—",
-          riskScore: item.score ?? 0,
-          loanAmount: item.amount ?? "—",
-          amountValue: item.amount_value ?? 0,
-          loanType: item.loan_type ?? "—",
-          status: item.status ?? "—",
-          joinedDate: item.date ?? "—",
+          joinedDate: item.joined ?? "—",
+          loans: (item.loans ?? []).map((l: any) => ({
+            reference: l.reference,
+            amount: l.amount,
+            loanType: l.loan_type,
+            status: l.status,
+            score: l.score ?? 0,
+          })),
         }));
         setBorrowers(mapped);
       } catch (err: any) {
@@ -94,11 +104,12 @@ export default function BorrowersList() {
   };
 
   const filtered = useMemo(() => borrowers.filter(b => {
-    const matchesSearch = !search || b.name.toLowerCase().includes(search.toLowerCase()) || b.id.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = filterStatus === "All" || b.status === filterStatus;
-    const matchesLoanType = filterLoanType === "All" || b.loanType === filterLoanType;
-    const matchesMinScore = !filterMinScore || b.riskScore >= Number(filterMinScore);
-    const matchesMaxScore = !filterMaxScore || b.riskScore <= Number(filterMaxScore);
+    const term = search.toLowerCase();
+    const matchesSearch = !search || b.name.toLowerCase().includes(term) || b.email.toLowerCase().includes(term) || b.loans.some(l => l.reference.toLowerCase().includes(term));
+    const matchesStatus = filterStatus === "All" || b.loans.some(l => l.status === filterStatus);
+    const matchesLoanType = filterLoanType === "All" || b.loans.some(l => l.loanType === filterLoanType);
+    const matchesMinScore = !filterMinScore || b.loans.some(l => l.score >= Number(filterMinScore));
+    const matchesMaxScore = !filterMaxScore || b.loans.some(l => l.score <= Number(filterMaxScore));
     return matchesSearch && matchesStatus && matchesLoanType && matchesMinScore && matchesMaxScore;
   }), [borrowers, search, filterStatus, filterLoanType, filterMinScore, filterMaxScore]);
 
@@ -265,30 +276,41 @@ export default function BorrowersList() {
                   <tr key={b.id} className="hover:bg-[#F4F6F8] transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-bold text-[#111827]">{b.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5 font-medium">{b.id} · {b.phone}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 font-medium">{b.email} · {b.phone}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{b.loans.length} loan{b.loans.length !== 1 ? "s" : ""}</div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-[#005B3F]">{b.loanAmount}</div>
-                      <div className="text-xs text-gray-500 mt-0.5 font-medium">{b.loanType}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-full max-w-[80px] h-2.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50">
-                          <div
-                            className={clsx("h-full rounded-full", b.riskScore < 30 ? "bg-[#B4D330]" : b.riskScore < 60 ? "bg-amber-400" : "bg-red-500")}
-                            style={{ width: `${b.riskScore}%` }}
-                          />
+                    <td className="px-6 py-4 space-y-2">
+                      {b.loans.length === 0 ? "—" : b.loans.map(l => (
+                        <div key={l.reference}>
+                          <div className="font-bold text-[#005B3F]">{l.amount}</div>
+                          <div className="text-xs text-gray-500 font-medium">{l.reference} · {l.loanType}</div>
                         </div>
-                        <span className="text-sm font-bold text-[#111827] w-6">{b.riskScore}</span>
-                      </div>
+                      ))}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={clsx("inline-block px-3 py-1 rounded-md text-xs font-bold border", statusStyles[b.status] ?? statusStyles["—"])}>
-                        {b.status}
-                      </span>
+                    <td className="px-6 py-4 space-y-4">
+                      {b.loans.map(l => (
+                        <div key={l.reference} className="flex items-center gap-3">
+                          <div className="w-full max-w-[80px] h-2.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50">
+                            <div
+                              className={clsx("h-full rounded-full", l.score < 30 ? "bg-[#B4D330]" : l.score < 60 ? "bg-amber-400" : "bg-red-500")}
+                              style={{ width: `${l.score}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold text-[#111827] w-6">{l.score}</span>
+                        </div>
+                      ))}
+                    </td>
+                    <td className="px-6 py-4 space-y-3">
+                      {b.loans.map(l => (
+                        <div key={l.reference}>
+                          <span className={clsx("inline-block px-3 py-1 rounded-md text-xs font-bold border", statusStyles[l.status] ?? statusStyles["—"])}>
+                            {l.status}
+                          </span>
+                        </div>
+                      ))}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 font-medium">
-                      {b.joinedDate === "—" ? "—" : b.joinedDate }
+                      {b.joinedDate}
                     </td>
                   </tr>
                 ))}
