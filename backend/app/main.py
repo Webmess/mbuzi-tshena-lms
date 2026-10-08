@@ -10,7 +10,7 @@ from app.database import init_db, SessionLocal
 from app.models import User, UserRole
 from app.auth import get_password_hash
 from app.routers import auth, applications, payments, admin, documents
-from app.routers import notifications
+from app.routers import notifications, proofs
 
 
 logging.basicConfig(level=logging.INFO)
@@ -113,6 +113,7 @@ app.include_router(payments.router)
 app.include_router(admin.router)
 app.include_router(documents.router)
 app.include_router(notifications.router)
+app.include_router(proofs.router)
 
 # Serve uploaded files in debug
 if settings.DEBUG:

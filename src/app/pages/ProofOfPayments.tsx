@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, CheckCircle2, XCircle, Clock, FileImage, FileText, Eye } from "lucide-react";
 import clsx from "clsx";
 
@@ -14,14 +14,6 @@ interface ProofRecord {
   status: "pending" | "verified" | "rejected";
 }
 
-const initialProofs: ProofRecord[] = [
-  { id: "POP-001", userName: "Sipho Mthembu",       userId: "USR-001", loanId: "APP-2024-001", fileName: "payment_proof_jan.pdf",  fileType: "pdf",   uploadedAt: "2024-03-15 10:23", loanAmount: "R 25,000",  status: "pending"  },
-  { id: "POP-002", userName: "Aisha Ndlovu",         userId: "USR-003", loanId: "REQ-9010",    fileName: "receipt_mar.jpg",          fileType: "image", uploadedAt: "2024-03-14 14:45", loanAmount: "R 25,000",  status: "verified" },
-  { id: "POP-003", userName: "David Molefe",         userId: "USR-002", loanId: "REQ-9011",    fileName: "bank_statement.pdf",       fileType: "pdf",   uploadedAt: "2024-03-13 09:30", loanAmount: "R 120,000", status: "rejected" },
-  { id: "POP-004", userName: "Sarah Jenkins",        userId: "USR-004", loanId: "REQ-9012",    fileName: "proof_payment.png",        fileType: "image", uploadedAt: "2024-03-12 16:00", loanAmount: "R 50,000",  status: "pending"  },
-  { id: "POP-005", userName: "Lerato Khumalo",       userId: "USR-005", loanId: "APP-2023-008", fileName: "receipt_aug23.jpg",       fileType: "image", uploadedAt: "2024-03-11 11:20", loanAmount: "R 10,000",  status: "verified" },
-  { id: "POP-006", userName: "Johan Van Der Merwe",  userId: "USR-006", loanId: "REQ-9008",    fileName: "eft_confirmation.pdf",     fileType: "pdf",   uploadedAt: "2024-03-10 08:55", loanAmount: "R 40,000",  status: "pending"  },
-];
 
 const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
@@ -30,12 +22,35 @@ const statusConfig = {
 };
 
 export default function ProofOfPayments() {
-  const [proofs, setProofs] = useState<ProofRecord[]>(initialProofs);
+  const [proofs, setProofs] = useState<ProofRecord[]>([]);
+  const API_URL = import.meta.env.VITE_API_URL;
+  useEffect(() => {
+    fetch(`${API_URL}/api/proofs`, { credentials: "include" })
+      .then(res => res.json())
+      .then((data: any[]) => setProofs(data.map(p => ({
+        id: p.id,
+        userName: p.user_name,
+        userId: p.user_email,
+        loanId: p.loan_reference,
+        fileName: p.file_name,
+        fileType: p.file_type,
+        uploadedAt: new Date(p.uploaded_at + "Z").toLocaleString("en-ZA"),
+        loanAmount: p.loan_amount,
+        status: p.status,
+      }))));
+  }, []);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
 
-  const updateStatus = (id: string, status: "verified" | "rejected") => {
-    setProofs(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+  const updateStatus = async (id: string, status: "verified" | "rejected") => {
+    const admin_notes = status === "rejected" ? prompt("Reason for rejecting?") : null;
+    const res = await fetch(`${API_URL}/api/proofs/${id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, admin_notes }),
+    });
+    if (res.ok) setProofs(prev => prev.map(p => p.id === id ? { ...p, status } : p));
   };
 
   const filtered = proofs.filter(p => {
@@ -195,6 +210,12 @@ export default function ProofOfPayments() {
                         <div className="flex items-center gap-2">
                           <button
                             title="Preview"
+                             onClick={async () => {
+                              const res = await fetch(`${API_URL}/api/proofs/${proof.id}/file`, { credentials: "include" });
+                              if (!res.ok) { alert("Could not open file"); return; }
+                              const blob = await res.blob();
+                              window.open(URL.createObjectURL(blob), "_blank");
+                            }}
                             className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors"
                           >
                             <Eye className="w-4 h-4" />

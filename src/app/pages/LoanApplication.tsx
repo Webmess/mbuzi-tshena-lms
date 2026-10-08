@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   Bell,
@@ -134,6 +134,16 @@ export default function LoanApplication() {
   const [currentStep, setCurrentStep] = useState(1);
   const [documents, setDocuments] = useState<Partial<Record<DocType, File>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+   useEffect(() => {
+    fetch(`${API_URL}/api/applications/me/eligibility`, { credentials: "include" })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && !data.can_apply) {
+          toast.error("You already have 2 open loans.");
+          navigate("/dashboard", { replace: true });
+        }
+      });
+  }, [navigate]);
 
   const {
     register,
@@ -304,6 +314,7 @@ export default function LoanApplication() {
       );
       navigate("/confirm", { state: { referenceNumber: application.reference_number } });
     } catch (err) {
+      console.error("Submit failed:", err);
       toast.error("Network error. Please check your connection and try again.");
     } finally {
       setIsSubmitting(false);

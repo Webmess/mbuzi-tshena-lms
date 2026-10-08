@@ -28,17 +28,6 @@ interface Alert {
   read: boolean;
 }
 
-const initialAlerts: Alert[] = [
-  { id: "ALT-001", type: "Fraud Suspicion",      relatedId: "REQ-8902", relatedUser: "Unknown applicant", dateTime: "2024-03-15 14:32", description: "Identity mismatch detected — name on ID does not match submitted documents. AI confidence: 96%.", status: "unresolved", read: false },
-  { id: "ALT-002", type: "Multiple Applications", relatedId: "REQ-8895", relatedUser: "David Molefe",     dateTime: "2024-03-15 13:47", description: "3 concurrent loan applications submitted from the same IP address within 10 minutes.", status: "unresolved", read: false },
-  { id: "ALT-003", type: "High Risk",             relatedId: "REQ-8841", relatedUser: "Johan Van Der Merwe", dateTime: "2024-03-15 11:20", description: "AI risk score of 82/100 — exceeds automatic rejection threshold. Loan amount requested is 6.7× annual income.", status: "unresolved", read: false },
-  { id: "ALT-004", type: "Fraud Suspicion",       relatedId: "REQ-8802", relatedUser: "Unknown applicant", dateTime: "2024-03-15 09:05", description: "Inconsistent income history — payslip shows R 45,000/month but bank deposits average R 12,000/month over 6 months.", status: "unresolved", read: true },
-  { id: "ALT-005", type: "Late Payment",          relatedId: "TRX-1089", relatedUser: "David Molefe",     dateTime: "2024-03-14 08:30", description: "Repayment TRX-1089 bounced — insufficient funds. 2nd consecutive missed payment. Account now 30+ days overdue.", status: "unresolved", read: true },
-  { id: "ALT-006", type: "Document Mismatch",     relatedId: "REQ-9007", relatedUser: "Johan Van Der Merwe", dateTime: "2024-03-13 16:15", description: "Submitted ID document does not match the National Population Register. Possible forged ID.", status: "resolved", read: true },
-  { id: "ALT-007", type: "High Risk",             relatedId: "REQ-8790", relatedUser: "Unknown applicant", dateTime: "2024-03-13 10:40", description: "AI flagged unusual login location — application submitted from outside South Africa while ID is SA-issued.", status: "resolved", read: true },
-  { id: "ALT-008", type: "Late Payment",          relatedId: "TRX-1080", relatedUser: "Michael Smit",     dateTime: "2024-03-12 09:00", description: "First missed payment on debt consolidation loan. Grace period expires in 5 days.", status: "resolved", read: true },
-];
-
 const typeConfig: Record<string, { color: string; icon: React.ReactNode }> = {
   "Fraud Suspicion":      { color: "bg-red-100 text-red-700 border-red-200",     icon: <ShieldAlert className="w-3.5 h-3.5" /> },
   "Multiple Applications":{ color: "bg-red-100 text-red-700 border-red-200",     icon: <RefreshCw className="w-3.5 h-3.5" /> },
@@ -49,10 +38,16 @@ const typeConfig: Record<string, { color: string; icon: React.ReactNode }> = {
 
 /* ─── Alerts Modal ────────────────────────────────────────────── */
 function AlertsModal({ onClose }: { onClose: () => void }) {
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/admin/alerts`, { credentials: "include" })
+      .then(res => (res.ok ? res.json() : []))
+      .then(setAlerts);
+  }, []);
   const [filter, setFilter] = useState<"All" | "Unresolved" | "Resolved">("All");
 
   const toggleResolved = (id: string) => {
+     fetch(`${import.meta.env.VITE_API_URL}/api/admin/alerts/${id}`, { method: "PATCH", credentials: "include" });
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: a.status === "resolved" ? "unresolved" : "resolved", read: true } : a));
   };
 
@@ -174,6 +169,12 @@ export default function DashboardOverview() {
   const [showAlerts, setShowAlerts] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL;
+  const [realAlerts, setRealAlerts] = useState<any[]>([]);
+  useEffect(() => {
+    fetch(`${API_URL}/api/admin/alerts`, { credentials: "include" })
+      .then(res => (res.ok ? res.json() : []))
+      .then(setRealAlerts);
+  }, []);
 
   useEffect(() => {
     loadDashboard();
@@ -198,7 +199,7 @@ export default function DashboardOverview() {
 
   const stats = dashboard?.stats ?? null;
   const data = dashboard?.chart_data ?? [];
-  const recentAlerts = dashboard?.recent_alerts ?? [];
+  const recentAlerts = realAlerts.filter(a => a.status === "unresolved");
 
   function StatCardSkeleton() {
     return (
@@ -387,18 +388,7 @@ export default function DashboardOverview() {
                   </div>
                 ))
               ) : (
-                initialAlerts.filter(a => a.status === "unresolved").slice(0, 4).map(alert => (
-                  <div key={alert.id} className="bg-[#FEF2F2] p-4 rounded-xl border border-red-100 transition-all hover:border-red-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-sm font-bold text-red-900">{alert.relatedId}</span>
-                      <span className="text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-md">
-                        {alert.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-red-800 font-medium mb-2 leading-snug line-clamp-2">{alert.description}</p>
-                    <div className="text-xs text-red-500 font-medium">{alert.dateTime}</div>
-                  </div>
-                ))
+               <p className="text-sm text-gray-400 text-center py-8">No unresolved fraud alerts</p>
               )}
             </div>
             <button

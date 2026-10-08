@@ -427,6 +427,16 @@ export default function UserDashboard() {
   }, []);
 
   const [proofUploads, setProofUploads] = useState<Record<string, string>>({});
+  useEffect(() => {
+   if (!user) return;
+    fetch(`${import.meta.env.VITE_API_URL}/api/proofs/me`, { credentials: "include" })
+      .then(res => res.ok ? res.json() : [])
+      .then((proofs: any[]) => {
+        const map: Record<string, string> = {};
+        proofs.forEach(p => { map[p.loan_reference] = p.file_name; });
+        setProofUploads(map);
+      });
+  }, [user]);
 
   const latestApplication = loanHistory.length > 0 ? loanHistory[0] : null;
   const aiRiskScore = latestApplication?.riskScore ?? null;
@@ -457,9 +467,18 @@ export default function UserDashboard() {
     setFilterMaxAmount("");
   };
 
-  const handleProofUpload = (loanId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setProofUploads(prev => ({ ...prev, [loanId]: file.name }));
+  const handleProofUpload = async (loanId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+   if (!file) return;
+  const form = new FormData();
+   form.append("file", file);
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/proofs/upload/${loanId}`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+  if (res.ok) setProofUploads(prev => ({ ...prev, [loanId]: file.name }));
+    else alert("Upload failed");
   };
 
   // ─── Loading state ────────────────────────────────────────────
