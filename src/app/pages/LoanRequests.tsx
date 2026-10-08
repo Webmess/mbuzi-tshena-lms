@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, Fragment } from "react";
 import {
   Search, Filter, ShieldCheck, ShieldAlert, Clock, ChevronRight,
   X, FileText, User, DollarSign, Calendar, Briefcase, AlertCircle,
@@ -30,6 +30,7 @@ interface LoanRequestListItem {
   aiAction: string | null;
   status: string;
   date: string;
+  email?: string;
   amountValue?: number; // only for client-side filtering if needed
 }
 
@@ -533,6 +534,12 @@ export default function LoanRequests() {
 
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
+  const groups = requests.reduce<Record<string, LoanRequestListItem[]>>((acc, r) => {
+    const key = r.email || r.name;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(r);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
@@ -663,15 +670,23 @@ export default function LoanRequests() {
                   </td>
                 </tr>
               ) : (
-                requests.map((req) => (
+                Object.entries(groups).map(([key, userRequests]) => (
+                  <Fragment key={key}>
+                    <tr className="bg-gray-50/70">
+                      <td colSpan={7} className="px-6 py-3">
+                        <span className="font-bold text-[#111827] text-sm">{userRequests[0].name}</span>
+                        {userRequests[0].email && <span className="text-xs text-gray-500 font-medium ml-2">{userRequests[0].email}</span>}
+                        <span className="text-xs text-gray-400 ml-2">· {userRequests.length} request{userRequests.length !== 1 ? "s" : ""}</span>
+                      </td>
+                    </tr>
+                    {userRequests.map((req) => (
                   <tr
                     key={req.id}
                     onClick={() => setSelectedRequestId(req.id)}
                     className="hover:bg-[#F4F6F8] transition-colors cursor-pointer group"
                   >
                     <td className="px-6 py-4">
-                      <div className="font-bold text-[#111827]">{req.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5 font-medium">{req.id}</div>
+                      <div className="text-sm font-medium text-gray-500">{req.id}</div>
                     </td>
                     <td className="px-6 py-4 font-bold text-[#005B3F]">{req.amount}</td>
                     <td className="px-6 py-4">
@@ -709,6 +724,8 @@ export default function LoanRequests() {
                       </button>
                     </td>
                   </tr>
+                ))}
+                  </Fragment>
                 ))
               )}
             </tbody>
