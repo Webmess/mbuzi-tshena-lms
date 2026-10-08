@@ -226,6 +226,7 @@ class LoanApplicationListItem(BaseModel):
     aiAction: Optional[str]
     status: str
     date: str  # formatted relative date
+    email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -289,6 +290,7 @@ class PaymentListItem(BaseModel):
     type: str
     date: str
     status: str
+    email: Optional[str] = None
 
 
 # ========== Document ==========

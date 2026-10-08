@@ -344,6 +344,7 @@ def list_applications(
         LoanApplicationListItem(
             id=a.reference_number,
             name=a.full_name,
+            email=a.email,
             amount=format_currency(float(a.loan_amount)),
             score=a.ai_risk_score or 0,
             aiAction=a.ai_action.value if a.ai_action else None,

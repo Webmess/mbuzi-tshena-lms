@@ -95,6 +95,7 @@ def list_payments(
             PaymentListItem(
                 id=p.transaction_id,
                 borrower=p.user.full_name if p.user else "Unknown",
+                email=p.user.email if p.user else "",
                 amount=f"{sign}{format_currency(float(p.amount))}",
                 type=p.payment_type.value,
                 date=relative_date(p.created_at),

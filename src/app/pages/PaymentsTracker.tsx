@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, Fragment } from "react";
 import {
   ArrowUpRight, ArrowDownRight, Search, Filter,
   X, User, DollarSign, Calendar, FileText, CheckCircle2,
@@ -18,7 +18,10 @@ interface TransactionListItem {
   payment_type: "Repayment" | "Disbursement";
   date: string;
   status: "Completed" | "Failed" | "Pending";
+   email?: string;      
+  borrower?: string;    
 }
+
 
 interface TransactionDetail extends TransactionListItem {
   user_id: string;
@@ -653,6 +656,12 @@ export default function PaymentsTracker() {
     // Refresh summary after manual repayment
     loadSummary();
   };
+  const groups = transactions.reduce<Record<string, any[]>>((acc, t: any) => {
+    const key = t.email || t.borrower;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
+    return acc;
+  }, {});
 
   const formatRand = (amount: number) => {
     return `R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -823,7 +832,16 @@ export default function PaymentsTracker() {
                   </td>
                 </tr>
               ) : (
-                transactions.map((tx) => (
+                Object.entries(groups).map(([key, userTx]) => (
+                  <Fragment key={key}>
+                    <tr className="bg-gray-50/70">
+                      <td colSpan={4} className="px-6 py-3">
+                        <span className="font-bold text-[#111827] text-sm">{userTx[0].borrower}</span>
+                        {userTx[0].email && <span className="text-xs text-gray-500 font-medium ml-2">{userTx[0].email}</span>}
+                        <span className="text-xs text-gray-400 ml-2">· {userTx.length} transaction{userTx.length !== 1 ? "s" : ""}</span>
+                      </td>
+                    </tr>
+                    {userTx.map((tx) => (
                   <tr
                     key={tx.id}
                     onClick={() => setSelectedTxId(tx.id)}
@@ -845,7 +863,7 @@ export default function PaymentsTracker() {
                           )}
                         </div>
                         <div>
-                          <div className="font-bold text-[#111827]">{tx.borrower}</div>
+                          <div className="font-bold text-[#111827]">{tx.type}</div>
                           <div className="text-xs text-gray-500 mt-0.5 font-medium">
                             {tx.id} • {tx.type}
                           </div>
@@ -872,6 +890,8 @@ export default function PaymentsTracker() {
                       </span>
                     </td>
                   </tr>
+                ))}
+                  </Fragment>
                 ))
               )}
             </tbody>
