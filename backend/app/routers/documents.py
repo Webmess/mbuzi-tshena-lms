@@ -1,13 +1,14 @@
 import os
 import secrets
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database import get_db
-from app.models import User, LoanApplication, Document, UserRole
+from app.models import User, LoanApplication, Document, DocumentCheck, UserRole
+from app.utils.doc_check import run_document_check
 from app.schemas import DocumentOut, Message
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
@@ -30,6 +31,7 @@ ALLOWED_TYPES = {
 @router.post("/upload/{application_id}", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     application_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     document_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -76,6 +78,7 @@ async def upload_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    background_tasks.add_task(run_document_check, doc.id)
     return doc
 
 
@@ -120,6 +123,7 @@ def delete_document(
     except Exception:
         pass
 
+    db.query(DocumentCheck).filter(DocumentCheck.document_id == doc.id).delete()
     db.delete(doc)
     db.commit()
     return Message(message="Document deleted")

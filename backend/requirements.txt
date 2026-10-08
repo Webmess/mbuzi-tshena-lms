@@ -25,6 +25,7 @@ MarkupSafe==3.0.3
 narwhals==2.25.0
 numpy==2.5.2
 pandas==3.0.5
+pdfplumber==0.11.10
 passlib==1.7.4
 pyasn1==0.6.4
 pycparser==3.0
@@ -36,6 +37,7 @@ python-dotenv==1.0.1
 python-jose==3.3.0
 python-multipart==0.0.20
 PyYAML==6.0.3
+rapidfuzz==3.14.6
 rsa==4.9.1
 scikit-learn==1.6.1
 scipy==1.18.1
@@ -48,3 +50,5 @@ tzdata==2026.3
 uvicorn==0.34.0
 watchfiles==1.2.0
 websockets==17.1
+
+

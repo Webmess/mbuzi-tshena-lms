@@ -223,7 +223,11 @@ def list_alerts(
      return [
         {
             "id": a.alert_id,
-            "type": "Fraud Suspicion" if a.risk_score >= 80 else "High Risk",
+            "type": (
+                "Document Mismatch" if a.reason.startswith("Document mismatch")
+                else "Fraud Suspicion" if a.risk_score >= 80
+                else "High Risk"
+            ),
             "relatedId": app.reference_number if app else "—",
             "relatedUser": app.full_name if app else "Unknown applicant",
             "dateTime": a.created_at.strftime("%Y-%m-%d %H:%M"),
