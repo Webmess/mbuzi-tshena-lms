@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router";
 
 type ProtectedRouteProps = {
-  adminOnly?: boolean;
+  requiredRole?: "admin" | "borrower";
   redirectTo?: string;
 };
 
 export default function ProtectedRoute({
-  adminOnly = false,
+  requiredRole,
   redirectTo = "/login",
 }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
@@ -35,11 +35,7 @@ export default function ProtectedRoute({
 
       sessionStorage.setItem("user", JSON.stringify(user));
 
-      if (adminOnly) {
-        setAuthorized(user.role === "admin");
-      } else {
-        setAuthorized(true);
-      }
+      setAuthorized(!requiredRole || user.role === requiredRole);
     } catch {
       setAuthorized(false);
     } finally {
