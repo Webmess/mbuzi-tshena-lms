@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import init_db, SessionLocal
-from app.models import User, UserRole
+from app.models import User, UserRole, FraudAlert, LoanApplication
 from app.auth import get_password_hash
 from app.routers import auth, applications, payments, admin, documents
 from app.routers import notifications, proofs
@@ -38,7 +38,20 @@ def seed_admin():
     finally:
         db.close()
 
-
+def fix_old_alert_text():
+    """One-time repair: alerts created before PR #12 show '<enum 'AIAction'>' instead of the action."""
+    db = SessionLocal()
+    try:
+        broken = db.query(FraudAlert).filter(FraudAlert.reason.like("%enum%")).all()
+        for alert in broken:
+            app_row = db.query(LoanApplication).filter(LoanApplication.id == alert.application_id).first()
+            action = app_row.ai_action.value if app_row and app_row.ai_action else "Unknown"
+            alert.reason = f"High AI risk score ({alert.risk_score}) – {action}"
+        if broken:
+            db.commit()
+            logger.info(f"Repaired {len(broken)} old fraud alert(s)")
+    finally:
+        db.close()
     """
 def seed_client():
    
@@ -72,6 +85,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     init_db()
     seed_admin()
+    fix_old_alert_text()
     #seed_client()
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     logger.info("Mbudzi Tshena LMS API ready")
