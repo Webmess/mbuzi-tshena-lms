@@ -17,6 +17,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { Logo } from "../components/Logo";
+import { isValidSaId } from "../utils/saId";
 import { useForm } from "react-hook-form";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -486,6 +487,7 @@ export default function LoanApplication() {
                           value: /^\d{13}$/,
                           message: "ID number must be 13 digits",
                         },
+                        validate: (v) => isValidSaId(v) || "This is not a valid South African ID number",
                       })}
                       placeholder="e.g., 9001010000000"
                       maxLength={13}

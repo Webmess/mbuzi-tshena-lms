@@ -3,6 +3,7 @@ from typing import Optional, List, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from enum import Enum
 import re
+from app.utils.sa_id import sa_id_checksum_ok
 
 
 # ========== Enums (mirroring models) ==========
@@ -76,6 +77,8 @@ class UserRegister(BaseModel):
     def validate_sa_id(cls, v: str) -> str:
         if not re.match(r"^\d{13}$", v):
             raise ValueError("ID number must be exactly 13 digits")
+        if not sa_id_checksum_ok(v):
+            raise ValueError("This is not a valid South African ID number. Please check it.")
         return v
 
     @field_validator("phone_number")
@@ -168,6 +171,8 @@ class LoanApplicationCreate(BaseModel):
     def validate_sa_id(cls, v: str) -> str:
         if not re.match(r"^\d{13}$", v):
             raise ValueError("ID number must be exactly 13 digits")
+        if not sa_id_checksum_ok(v):
+            raise ValueError("This is not a valid South African ID number. Please check it.")
         return v
 
 
