@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { TrendingUp, CheckCircle2, Clock, XCircle } from "lucide-react";
 import clsx from "clsx";
 
@@ -13,13 +13,6 @@ interface InvestorRequest {
   status: "pending" | "approved" | "rejected";
 }
 
-const initialRequests: InvestorRequest[] = [
-  { id: "INV-001", name: "Sipho Mthembu",  userId: "USR-001", amount: 10000, duration: 12, riskLevel: "Moderate",     submittedAt: "2024-03-15 11:20", status: "pending"  },
-  { id: "INV-002", name: "Zanele Mokoena", userId: "USR-010", amount: 50000, duration: 24, riskLevel: "Conservative", submittedAt: "2024-03-14 09:45", status: "approved" },
-  { id: "INV-003", name: "Kagiso Sithole", userId: "USR-009", amount: 5000,  duration: 6,  riskLevel: "Aggressive",   submittedAt: "2024-03-13 16:30", status: "pending"  },
-  { id: "INV-004", name: "Nomsa Dlamini",  userId: "USR-008", amount: 25000, duration: 36, riskLevel: "Moderate",     submittedAt: "2024-03-12 14:00", status: "rejected" },
-];
-
 const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
   approved: { label: "Approved",       className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
@@ -33,11 +26,34 @@ const riskColors: Record<string, string> = {
 };
 
 export default function InvestorRequests() {
-  const [requests, setRequests] = useState<InvestorRequest[]>(initialRequests);
+  const [requests, setRequests] = useState<InvestorRequest[]>([]);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/investments`, { credentials: "include" })
+      .then(res => res.ok ? res.json() : [])
+      .then((data: any[]) => setRequests(data.map(i => ({
+        id: i.id,
+        name: i.user_name,
+        userId: i.user_email,
+        amount: i.amount,
+        duration: i.duration,
+        riskLevel: i.risk_level,
+        submittedAt: i.submitted_at,
+        status: i.status,
+      }))));
+  }, []);
   const [filter, setFilter]     = useState("All");
 
-  const updateStatus = (id: string, status: "approved" | "rejected") => {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  const updateStatus = async (id: string, status: "approved" | "rejected") => {
+    const admin_notes = status === "rejected" ? prompt("Reason for rejecting?") : null;
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/${id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, admin_notes }),
+    });
+    if (res.ok) setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    else alert("Could not update the request");
   };
 
   const filtered = requests.filter(r =>
@@ -46,7 +62,11 @@ export default function InvestorRequests() {
     (filter === "Approved" && r.status === "approved") ||
     (filter === "Rejected" && r.status === "rejected")
   );
-
+  const groups = filtered.reduce<Record<string, InvestorRequest[]>>((acc, r) => {
+    if (!acc[r.userId]) acc[r.userId] = [];
+    acc[r.userId].push(r);
+    return acc;
+  }, {});
   const totalValue = requests.reduce((sum, r) => sum + r.amount, 0);
   const pendingCount  = requests.filter(r => r.status === "pending").length;
   const approvedCount = requests.filter(r => r.status === "approved").length;
@@ -107,13 +127,21 @@ export default function InvestorRequests() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 font-medium">No investment requests in this category.</td></tr>
               ) : (
-                filtered.map(req => {
+                Object.entries(groups).map(([email, userReqs]) => (
+                  <Fragment key={email}>
+                    <tr className="bg-gray-50/70">
+                      <td colSpan={7} className="px-6 py-3">
+                        <span className="font-bold text-[#111827] text-sm">{userReqs[0].name}</span>
+                        <span className="text-xs text-gray-500 font-medium ml-2">{email}</span>
+                        <span className="text-xs text-gray-400 ml-2">· {userReqs.length} request{userReqs.length !== 1 ? "s" : ""}</span>
+                      </td>
+                    </tr>
+                    {userReqs.map(req => {
                   const cfg = statusConfig[req.status];
                   return (
                     <tr key={req.id} className="hover:bg-[#F4F6F8] transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-[#111827]">{req.name}</div>
-                        <div className="text-xs text-gray-500 mt-0.5 font-medium">{req.userId} · {req.id}</div>
+                        <div className="text-xs text-gray-500 font-medium">{req.id}</div>
                       </td>
                       <td className="px-6 py-4 font-bold text-[#005B3F] text-base">
                         R {req.amount.toLocaleString()}
@@ -157,7 +185,9 @@ export default function InvestorRequests() {
                       </td>
                     </tr>
                   );
-                })
+                 })}
+                  </Fragment>
+                ))
               )}
             </tbody>
           </table>

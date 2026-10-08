@@ -273,6 +273,8 @@ class NotificationType(str, enum.Enum):
     PROOF_REJECTED = "proof_rejected"
     LOAN_APPROVED = "loan_approved"
     LOAN_REJECTED = "loan_rejected"
+    INVESTMENT_APPROVED = "investment_approved"
+    INVESTMENT_REJECTED = "investment_rejected"
 
 
 class Notification(Base):
@@ -310,3 +312,24 @@ class ProofOfPayment(Base):
 
     user: Mapped["User"] = relationship("User")
     application: Mapped["LoanApplication"] = relationship("LoanApplication")
+
+class InvestmentStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+class Investment(Base):
+    __tablename__ = "investments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    investment_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    duration_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[InvestmentStatus] = mapped_column(SAEnum(InvestmentStatus), default=InvestmentStatus.PENDING)
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+
