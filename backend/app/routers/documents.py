@@ -2,6 +2,7 @@ import os
 import secrets
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -122,3 +123,21 @@ def delete_document(
     db.delete(doc)
     db.commit()
     return Message(message="Document deleted")
+
+@router.get("/{document_id}/file")
+def get_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    app = db.query(LoanApplication).filter(LoanApplication.id == doc.application_id).first()
+    if current_user.role != UserRole.ADMIN and (not app or app.user_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="File missing on server")
+    return FileResponse(doc.file_path, media_type=doc.content_type)
