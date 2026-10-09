@@ -119,7 +119,7 @@ async def get_current_user(
 async def get_current_active_borrower(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    if current_user.role != UserRole.BORROWER and current_user.role != UserRole.ADMIN:
+    if current_user.role != UserRole.BORROWER:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return current_user
 
