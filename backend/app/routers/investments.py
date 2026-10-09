@@ -19,6 +19,7 @@ from app.config import settings
 from app.utils.risk_score import relative_date
 from app.utils.investment_interest import RATES, investment_figures
 from app.utils.deposit_check import run_deposit_check
+from app.utils.email import send_investment_email
 
 router = APIRouter(prefix="/api/investments", tags=["Investments"])
 
@@ -51,7 +52,25 @@ class DepositReview(BaseModel):
     status: str                               # "verified" or "rejected"
     admin_notes: Optional[str] = None
 
+def money(value: float) -> str:
+    return f"R{value:,.2f}"
 
+def long_date(iso: str) -> str:
+    return date.fromisoformat(iso).strftime("%d %B %Y")  # "2026-10-09" -> "09 October 2026"
+
+def email_customer(background_tasks: BackgroundTasks, inv: Investment, subject: str, heading: str,
+                   intro: str, details: dict, note: str = ""):
+    """Send an investment email to the customer after the response, like the loan application email."""
+    background_tasks.add_task(
+        send_investment_email,
+        to_email=inv.user.email,
+        subject=subject,
+        customer_name=inv.user.full_name,
+        heading=heading,
+        intro=intro,
+        details=details,
+        note=note,
+    )
 def stage(i: Investment) -> str:
     """Where the investment is: pending -> awaiting_deposit -> active (or rejected)."""
     if i.status == InvestmentStatus.APPROVED:
@@ -94,6 +113,7 @@ def investment_to_dict(i: Investment) -> dict:
 @router.post("", status_code=201)
 def create_investment(
     data: InvestmentCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -109,6 +129,21 @@ def create_investment(
     db.add(inv)
     db.commit()
     db.refresh(inv)
+    figures = investment_figures(inv)
+    email_customer(
+        background_tasks, inv,
+        subject=f"Investment request received – {inv.investment_id}",
+        heading="We received your investment request",
+        intro="thank you for choosing to invest with us. Here is a summary of your request.",
+        details={
+            "Reference": inv.investment_id,
+            "Amount": money(float(inv.amount)),
+            "Duration": f"{inv.duration_months} months",
+            "Risk level": f"{inv.risk_level} ({figures['annual_rate']}% a year)",
+            "Expected value at maturity": money(figures["expected_at_maturity"]),
+        },
+        note="We will let you know as soon as your request has been reviewed.",
+    )
     return investment_to_dict(inv)
 
 # Customer sees their own reques
@@ -140,6 +175,7 @@ def list_investments(
 def review_investment(
     investment_id: str,
     review: InvestmentReview,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
@@ -160,12 +196,40 @@ def review_investment(
                 f"with reference {inv.investment_id}, then upload your proof of payment."
             ),
         ))
+        email_customer(
+            background_tasks, inv,
+            subject=f"Investment approved: please pay your deposit – {inv.investment_id}",
+            heading="Your investment has been approved",
+            intro="please pay your investment amount into the account below to activate it.",
+            details={
+                "Amount to pay": money(float(inv.amount)),
+                "Account name": PAY_TO["account_name"],
+                "Bank": PAY_TO["bank"],
+                "Account number": PAY_TO["account_number"],
+                "Branch code": PAY_TO["branch_code"],
+                "Payment reference": inv.investment_id,
+            },
+            note="Use the payment reference exactly as shown, then upload your proof of payment on your dashboard. "
+                 "Your investment starts earning interest once we have verified your deposit.",
+        )
     elif review.status == InvestmentStatus.REJECTED:
         db.add(Notification(
             user_id=inv.user_id,
             type=NotificationType.INVESTMENT_REJECTED,
             message=f"Your investment request {inv.investment_id} was rejected. Reason: {review.admin_notes or 'not given'}",
         ))
+        email_customer(
+            background_tasks, inv,
+            subject=f"Investment request update – {inv.investment_id}",
+            heading="Your investment request was not approved",
+            intro="unfortunately we could not approve your investment request.",
+            details={
+                "Reference": inv.investment_id,
+                "Amount": money(float(inv.amount)),
+                "Reason": review.admin_notes or "Not given",
+            },
+            note="You are welcome to submit a new request from your dashboard.",
+        )
 
     db.commit()
     db.refresh(inv)
@@ -232,6 +296,7 @@ def get_deposit_file(
 def review_deposit(
     deposit_id: str,
     review: DepositReview,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
@@ -269,4 +334,34 @@ def review_deposit(
 
     db.commit()
     db.refresh(inv)
+    if review.status == "verified":
+        figures = investment_figures(inv)
+        email_customer(
+            background_tasks, inv,
+            subject=f"Your investment is now active – {inv.investment_id}",
+            heading="Your investment is now active",
+            intro="we have received your deposit and your investment has started earning interest.",
+            details={
+                "Reference": inv.investment_id,
+                "Amount invested": money(float(inv.amount)),
+                "Interest rate": f"{figures['annual_rate']}% a year",
+                "Start date": long_date(figures["start_date"]),
+                "Maturity date": long_date(figures["maturity_date"]),
+                "Value at maturity": money(figures["expected_at_maturity"]),
+            },
+            note="You can follow how your investment grows every day on your dashboard.",
+        )
+    else:
+        email_customer(
+            background_tasks, inv,
+            subject=f"Proof of deposit not accepted – {inv.investment_id}",
+            heading="We could not accept your proof of deposit",
+            intro="we could not verify the proof of deposit you uploaded.",
+            details={
+                "Reference": inv.investment_id,
+                "Amount to pay": money(float(inv.amount)),
+                "Reason": review.admin_notes or "Not given",
+            },
+            note="Please upload a new proof of payment on your dashboard.",
+        )
     return investment_to_dict(inv)
