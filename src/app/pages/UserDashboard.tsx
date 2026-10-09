@@ -64,6 +64,35 @@ const formatCurrency = (value: number) =>
   `R ${value.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
 const formatMoney = (value: number) =>
   `R ${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+
+/* ─── Investments ────────────────────────────────────────────────── */
+// Yearly interest per risk level. Keep in sync with RATES in backend/app/utils/investment_interest.py
+const INVESTMENT_RATES: Record<string, number> = { Conservative: 7.5, Moderate: 9.5, Aggressive: 11.5 };
+
+// Matches investment_to_dict in backend/app/routers/investments.py
+interface InvestmentRecord {
+  id: string;
+  amount: number;
+  duration: number;
+  risk_level: string;
+  status: string;
+  admin_notes: string | null;
+  created_at: string;
+  annual_rate: number;
+  expected_at_maturity: number;
+  start_date: string | null;
+  maturity_date: string | null;
+  months_done: number;
+  value_today: number | null;
+  interest_earned: number | null;
+}
+const INVESTMENT_STATUS: Record<string, { label: string; className: string }> = {
+  pending:  { label: "Pending",  className: "bg-amber-50 text-amber-700 border-amber-100" },
+  approved: { label: "Active",   className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30" },
+  rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-100" },
+};
 
 /* ─── Investor modal ─────────────────────────────────────────────── */
 interface InvestorFormData {
@@ -155,18 +184,25 @@ function InvestorModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
             <div>
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Risk Level</label>
               <div className="flex gap-2">
-                {[["Conservative", "Low return, low risk"], ["Moderate", "Balanced portfolio"], ["Aggressive", "High return, higher risk"]].map(([v, desc]) => (
+                {[["Conservative", "low risk"], ["Moderate", "balanced"], ["Aggressive", "higher risk"]].map(([v, desc]) => (
                   <button key={v} type="button" onClick={() => setRisk(v)}
                     className={clsx("flex-1 py-2 px-2 rounded-lg border-2 text-xs font-bold transition-all text-left",
                       risk === v ? "bg-[#E5F2D9] border-[#005B3F] text-[#005B3F]" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300")}>
                     <div>{v}</div>
-                    <div className={clsx("font-normal mt-0.5", risk === v ? "text-[#005B3F]/70" : "text-gray-400")}>{desc}</div>
+                    <div className={clsx("font-normal mt-0.5", risk === v ? "text-[#005B3F]/70" : "text-gray-400")}>{INVESTMENT_RATES[v]}% a year, {desc}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Terms */}
+            {/* What the investment grows to */}
+            {Number(amount) >= 1000 && (
+              <div className="rounded-lg bg-[#E5F2D9] border border-[#B4D330]/40 p-3 text-xs text-[#005B3F] font-medium">
+                After {duration} months at {INVESTMENT_RATES[risk]}% a year, {formatMoney(Number(amount))} grows to about{" "}
+                <strong>{formatMoney(Number(amount) * (1 + INVESTMENT_RATES[risk] / 100 / 12) ** Number(duration))}</strong>
+              </div>
+            )}
             <div>
               <label className={clsx("flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors",
                 agreed ? "bg-[#E5F2D9] border-[#B4D330]/40" : errors.agreed ? "border-red-300 bg-red-50" : "border-gray-200 hover:border-gray-300")}>
@@ -392,7 +428,7 @@ export default function UserDashboard() {
 
    // ─── Investor modal / "Total Invested" ──────────────────────────
   const [showInvestorModal, setShowInvestorModal] = useState(false);
-  const [investments, setInvestments] = useState<{ id: string; amount: number; status: string }[]>([]);
+  const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -421,6 +457,12 @@ export default function UserDashboard() {
     () => investments.filter(i => i.status === "pending").reduce((sum, i) => sum + i.amount, 0),
     [investments]
   );
+  // What the active investments are worth today, and how much they have grown so far
+  const investedValueToday = useMemo(
+    () => investments.filter(i => i.status === "approved").reduce((sum, i) => sum + (i.value_today ?? i.amount), 0),
+    [investments]
+  );
+  const investmentGrowth = investedValueToday - totalInvested;
 
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [filterStatus, setFilterStatus]       = useState("all");
@@ -823,6 +865,11 @@ else alert("Upload failed");};
                   <div>
                     <div className="text-xs font-medium text-gray-500">Total Invested</div>
                     <div className="text-sm font-bold text-gray-900">{formatCurrency(totalInvested)}</div>
+                    {totalInvested > 0 && (
+                      <div className="text-xs text-green-600 font-medium">
+                        Worth {formatMoney(investedValueToday)} today · +{formatMoney(investmentGrowth)}
+                      </div>
+                    )}
                     {pendingInvested > 0 && (
                       <div className="text-xs text-amber-600 font-medium">+ {formatCurrency(pendingInvested)} pending</div>
                     )}
@@ -1086,6 +1133,83 @@ else alert("Upload failed");};
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+        {/* Investment History */}
+        <div className="mt-8">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-[#111827]">Investment History</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {investments.length} investment{investments.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {investments.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">
+                You have no investments yet. Use "Explore Investments" to start one.
+              </div>
+            ) : (
+              investments.map(inv => {
+                const cfg = INVESTMENT_STATUS[inv.status] ?? INVESTMENT_STATUS.pending;
+                return (
+                  <div key={inv.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                    <div className="flex flex-wrap items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="font-bold text-gray-900 text-sm">{inv.id}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${cfg.className}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {inv.risk_level} • {inv.annual_rate}% a year • {inv.duration} months • requested {formatDate(inv.created_at)}
+                          </div>
+                      </div>
+                      <div className="text-xl font-black text-[#005B3F] shrink-0">{formatMoney(inv.amount)}</div>
+                    </div>
+                    {inv.status === "approved" && inv.value_today !== null ? (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="grid grid-cols-3 gap-3 text-xs mb-3">
+                          <div>
+                            <div className="text-gray-500">Value today</div>
+                            <div className="font-bold text-gray-900 text-sm">{formatMoney(inv.value_today)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-500">Interest earned</div>
+                            <div className="font-bold text-[#005B3F] text-sm">+ {formatMoney(inv.interest_earned ?? 0)}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-500">At maturity</div>
+                            <div className="font-bold text-gray-900 text-sm">{formatMoney(inv.expected_at_maturity)}</div>
+                             </div>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#B4D330] rounded-full transition-all"
+                            style={{ width: `${(inv.months_done / inv.duration) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+                          <span>Started {formatDate(inv.start_date!)}</span>
+                          <span>{inv.months_done} of {inv.duration} months</span>
+                          <span>Matures {formatDate(inv.maturity_date!)}</span>
+                        </div>
+                      </div>
+                       ) : inv.status === "pending" ? (
+                      <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                        Waiting for approval. Expected value after {inv.duration} months:{" "}
+                        <span className="font-bold text-[#005B3F]">{formatMoney(inv.expected_at_maturity)}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-red-600">
+                        Reason: {inv.admin_notes || "No reason given"}
+                      </p>
                     )}
                   </div>
                 );
