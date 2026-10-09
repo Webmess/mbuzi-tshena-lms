@@ -14,7 +14,14 @@ interface ProofRecord {
   status: "pending" | "verified" | "rejected";
   amountPaid: number | null;
   totals: { total_repayable: number; amount_paid: number; balance: number } | null;
+  check: { status: string; details: string | null; amount_found: number | null } | null;
 }
+// Result of the automatic proof check (backend/app/utils/proof_check.py)
+const CHECK_BADGES: Record<string, { label: string; className: string }> = {
+  passed:     { label: "Checks passed", className: "bg-green-100 text-green-700 border-green-200" },
+  mismatch:   { label: "Mismatch",      className: "bg-amber-100 text-amber-700 border-amber-200" },
+  unreadable: { label: "Unreadable",    className: "bg-gray-100 text-gray-600 border-gray-200" },
+};
 const rand = (n: number) =>
   "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -42,6 +49,7 @@ export default function ProofOfPayments() {
         status: p.status,
         amountPaid: p.amount_paid,
         totals: p.loan_totals,
+        check: p.check,
       }))));
  useEffect(() => { loadProofs(); }, []);
   const [search, setSearch] = useState("");
@@ -51,7 +59,9 @@ export default function ProofOfPayments() {
     const admin_notes = status === "rejected" ? prompt("Reason for rejecting?") : null;
     let amount: number | null = null;
     if (status === "verified") {
-      const typed = prompt("Amount paid (R), as shown on the proof:");
+      // Pre-fill the amount that OCR read from the proof, so the admin only has to confirm it
+      const found = proofs.find(p => p.id === id)?.check?.amount_found;
+      const typed = prompt("Amount paid (R), as shown on the proof:", found ? found.toFixed(2) : "");
       if (typed === null) return; // admin pressed Cancel
       amount = Number(typed.replace(/[^\d.]/g, ""));
       if (!amount) { alert("Please enter the amount that was paid"); return; }
@@ -203,6 +213,19 @@ export default function ProofOfPayments() {
                             <div className="text-xs text-gray-400 uppercase font-medium mt-0.5">
                               {proof.fileType === "image" ? "Image" : "PDF"}
                             </div>
+                            {proof.check && (
+                              <span className={clsx(
+                                "inline-flex items-center gap-1 mt-1 text-xs font-bold px-2 py-0.5 rounded-md border",
+                                (CHECK_BADGES[proof.check.status] ?? CHECK_BADGES.unreadable).className
+                              )}>
+                                {proof.check.status === "passed" && <CheckCircle2 className="w-3 h-3" />}
+                                {(CHECK_BADGES[proof.check.status] ?? CHECK_BADGES.unreadable).label}
+                                {proof.check.amount_found !== null && ` · ${rand(proof.check.amount_found)}`}
+                              </span>
+                            )}
+                            {proof.check?.details && (
+                              <p className="text-xs text-amber-700 mt-1 max-w-[260px] whitespace-pre-line">{proof.check.details}</p>
+                            )}
                           </div>
                         </div>
                       </td>

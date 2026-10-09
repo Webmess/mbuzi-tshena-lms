@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from app.config import settings
 from app.utils.risk_score import format_currency
 from app.utils.loan_balance import loan_totals, update_loan_balance
 from app.routers.payments import generate_trx_id
+from app.utils.proof_check import run_proof_check
 
 router = APIRouter(prefix="/api/proofs", tags=["Proof of Payment"])
 
@@ -52,11 +53,17 @@ def proof_to_dict(p: ProofOfPayment) -> dict:
         "admin_notes": p.admin_notes,
         "amount_paid": float(payment.amount) if payment and payment.status == PaymentStatus.COMPLETED else None,
         "loan_totals": loan_totals(loan) if loan else None,
+        "check": {
+            "status": p.check.status,
+            "details": p.check.details,
+            "amount_found": float(p.check.amount_found) if p.check.amount_found is not None else None,
+        } if p.check else None,
     }
 
 @router.post("/upload/{reference_number}", status_code=201)
 async def upload_proof(
     reference_number: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -98,6 +105,7 @@ async def upload_proof(
     db.add(proof)
     db.commit()
     db.refresh(proof)
+    background_tasks.add_task(run_proof_check, proof.id)
     return proof_to_dict(proof)
 
 @router.get("/me")
