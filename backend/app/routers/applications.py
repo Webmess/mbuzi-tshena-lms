@@ -413,7 +413,7 @@ def update_application_status(
             interest_rate=rate,
             term_months=term,
             monthly_instalment=round(instalment, 2),
-            outstanding_balance=principal,
+            outstanding_balance=round(total, 2),
             total_repayable=round(total, 2),
             status="Active",
         )
