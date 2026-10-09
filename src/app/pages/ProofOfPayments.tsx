@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { Search, CheckCircle2, XCircle, Clock, FileImage, FileText, Eye } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, FileImage, FileText, Eye, Pencil } from "lucide-react";
 import clsx from "clsx";
 
 interface ProofRecord {
@@ -59,8 +59,9 @@ export default function ProofOfPayments() {
     const admin_notes = status === "rejected" ? prompt("Reason for rejecting?") : null;
     let amount: number | null = null;
     if (status === "verified") {
-      // Pre-fill the amount that OCR read from the proof, so the admin only has to confirm it
-      const found = proofs.find(p => p.id === id)?.check?.amount_found;
+      // Pre-fill the amount already recorded (when editing) or the one OCR read from the proof
+      const current = proofs.find(p => p.id === id);
+      const found = current?.amountPaid ?? current?.check?.amount_found;
       const typed = prompt("Amount paid (R), as shown on the proof:", found ? found.toFixed(2) : "");
       if (typed === null) return; // admin pressed Cancel
       amount = Number(typed.replace(/[^\d.]/g, ""));
@@ -284,6 +285,15 @@ export default function ProofOfPayments() {
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               Verify
+                            </button>
+                          )}
+                          {proof.status === "verified" && (
+                            <button
+                              onClick={() => updateStatus(proof.id, "verified")}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 transition-colors flex items-center gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Edit amount
                             </button>
                           )}
                           {proof.status !== "rejected" && (

@@ -162,6 +162,7 @@ def review_proof(
 
     loan = proof.application.loan
     payment = proof_payment(proof)
+    was_verified = proof.status == ProofStatus.VERIFIED  # True when the admin is only correcting the amount
 
     if review.status == ProofStatus.VERIFIED:
         if not loan:
@@ -197,9 +198,10 @@ def review_proof(
             user_id=proof.user_id,
             type=NotificationType.PROOF_ACCEPTED,
             message=(
+                f"The amount recorded for your payment on loan {ref} was corrected to R{review.amount:,.2f}. "
+                if was_verified else
                 f"Your payment of R{review.amount:,.2f} for loan {ref} has been verified. "
-                f"Remaining balance: R{totals['balance']:,.2f}."
-            ),
+            ) + f"Remaining balance: R{totals['balance']:,.2f}.",
         ))        
     elif review.status == ProofStatus.REJECTED:
         db.add(Notification(
