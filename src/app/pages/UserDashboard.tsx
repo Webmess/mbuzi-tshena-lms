@@ -46,6 +46,7 @@ interface ApiLoanSummary {
   outstanding_balance: number;
   monthly_instalment: number;
   total_repayable: number;
+  amount_paid: number;
 }
 
 interface ApiApplicationHistoryItem {
@@ -61,6 +62,8 @@ interface ApiApplicationHistoryItem {
 
 const formatCurrency = (value: number) =>
   `R ${value.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
+const formatMoney = (value: number) =>
+  `R ${value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /* ─── Investor modal ─────────────────────────────────────────────── */
 interface InvestorFormData {
@@ -199,6 +202,7 @@ interface LoanRecord {
   date: string;
   repaymentProbability: number | null;
   riskScore: number;
+  loan: ApiLoanSummary | null;
 }
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
@@ -306,6 +310,7 @@ export default function UserDashboard() {
         date: item.created_at.slice(0, 10), // YYYY-MM-DD, for the date-range filter
         repaymentProbability: item.repayment_probability,
         riskScore: item.ai_risk_score ?? 0,
+        loan: item.loan,
       })),
     [apiHistory]
   );
@@ -962,8 +967,10 @@ else alert("Upload failed");};
               filteredHistory.map(loan => {
                 const cfg = statusConfig[loan.status];
                 const loanProofs = proofUploads[loan.id] ?? [];
-                const proofFile = loanProofs[0];
-                const canUploadProof = loan.status === "approved" || loan.status === "repaid";
+                // One proof per payment: a new one can be uploaded once the last one has been reviewed
+                const proofUnderReview = loanProofs.some(p => p.status === "pending");
+                const canUploadProof = loan.status === "approved" && !proofUnderReview;
+
 
                 return (
                   <div key={loan.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow">
@@ -1011,12 +1018,10 @@ else alert("Upload failed");};
 
                       {/* Proof of payment */}
                       <div className="shrink-0">
-                        {proofFile && proofFile.status !== "rejected" ? (
-                          <div className="flex items-center gap-2">
-                           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E5F2D9] text-[#005B3F] rounded-lg text-xs font-bold border border-[#B4D330]/30">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                             Proof Uploaded
-                           </div>
+                        {proofUnderReview ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-100">
+                            <Clock className="w-3.5 h-3.5" />
+                            Proof under review
                           </div>
                         ) : canUploadProof ? (
                           <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-[#005B3F] text-[#005B3F] rounded-lg text-xs font-bold cursor-pointer hover:bg-[#005B3F] hover:text-white transition-colors">
@@ -1029,6 +1034,11 @@ else alert("Upload failed");};
                               onChange={e => handleProofUpload(loan.id, e)}
                             />
                           </label>
+                        ) : loan.status === "repaid" ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E5F2D9] text-[#005B3F] rounded-lg text-xs font-bold border border-[#B4D330]/30">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Paid off
+                          </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs font-medium border border-gray-100">
                             <FileText className="w-3.5 h-3.5" />
@@ -1037,7 +1047,27 @@ else alert("Upload failed");};
                         )}
                       </div>
                     </div>
-
+                    {loan.loan && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex flex-wrap justify-between gap-2 text-xs mb-1.5">
+                          <span className="text-gray-500">
+                            Paid <span className="font-bold text-[#005B3F]">{formatMoney(loan.loan.amount_paid)}</span> of {formatMoney(loan.loan.total_repayable)}
+                            </span>
+                          <span className="text-gray-500">
+                            Balance <span className="font-bold text-gray-900">{formatMoney(loan.loan.outstanding_balance)}</span>
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#B4D330] rounded-full transition-all"
+                            style={{ width: `${Math.min(100, (loan.loan.amount_paid / loan.loan.total_repayable) * 100)}%` }}
+                            />
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1.5">
+                          Monthly instalment {formatMoney(loan.loan.monthly_instalment)}
+                        </div>
+                      </div>
+                    )}
                     {loanProofs.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
                         {loanProofs.map(p => (

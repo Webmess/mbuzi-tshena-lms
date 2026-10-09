@@ -12,6 +12,7 @@ from app.schemas import (
 )
 from app.auth import get_current_user, get_current_admin
 from app.utils.risk_score import format_currency, relative_date
+from app.utils.loan_balance import update_loan_balance
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
@@ -46,11 +47,11 @@ def create_payment(
 
     # Update loan balance if repayment
     if data.loan_id and data.payment_type == PaymentType.REPAYMENT:
+        db.flush()  # so the new payment is counted
         loan = db.query(Loan).filter(Loan.id == data.loan_id).first()
         if loan:
-            loan.outstanding_balance = max(0, float(loan.outstanding_balance) - float(data.amount))
-            if loan.outstanding_balance <= 0:
-                loan.status = "Paid Off"
+            db.refresh(loan)
+            update_loan_balance(loan)
 
     db.commit()
     db.refresh(payment)
