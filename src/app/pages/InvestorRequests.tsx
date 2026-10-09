@@ -11,11 +11,18 @@ interface InvestorRequest {
   riskLevel: string;
   submittedAt: string;
   status: "pending" | "approved" | "rejected";
+  annualRate: number;
+  expectedAtMaturity: number;
+  valueToday: number | null;
+  monthsDone: number;
+  maturityDate: string | null;
 }
+const rand = (n: number) =>
+  "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
-  approved: { label: "Approved",       className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  approved: { label: "Active",       className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   rejected: { label: "Rejected",       className: "bg-red-50 text-red-700 border-red-100",           icon: <XCircle className="w-3.5 h-3.5" /> },
 };
 
@@ -28,7 +35,7 @@ const riskColors: Record<string, string> = {
 export default function InvestorRequests() {
   const [requests, setRequests] = useState<InvestorRequest[]>([]);
 
-  useEffect(() => {
+  const loadRequests = () =>
     fetch(`${import.meta.env.VITE_API_URL}/api/investments`, { credentials: "include" })
       .then(res => res.ok ? res.json() : [])
       .then((data: any[]) => setRequests(data.map(i => ({
@@ -40,8 +47,13 @@ export default function InvestorRequests() {
         riskLevel: i.risk_level,
         submittedAt: i.submitted_at,
         status: i.status,
+        annualRate: i.annual_rate,
+        expectedAtMaturity: i.expected_at_maturity,
+        valueToday: i.value_today,
+        monthsDone: i.months_done,
+        maturityDate: i.maturity_date,
       }))));
-  }, []);
+  useEffect(() => { loadRequests(); }, []);
   const [filter, setFilter]     = useState("All");
 
   const updateStatus = async (id: string, status: "approved" | "rejected") => {
@@ -52,14 +64,15 @@ export default function InvestorRequests() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, admin_notes }),
     });
-    if (res.ok) setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    // Reload so the start date, value today and maturity date come from the backend
+    if (res.ok) loadRequests();
     else alert("Could not update the request");
   };
 
   const filtered = requests.filter(r =>
     filter === "All" ||
     (filter === "Pending"  && r.status === "pending")  ||
-    (filter === "Approved" && r.status === "approved") ||
+    (filter === "Active"   && r.status === "approved") ||
     (filter === "Rejected" && r.status === "rejected")
   );
   const groups = filtered.reduce<Record<string, InvestorRequest[]>>((acc, r) => {
@@ -67,7 +80,10 @@ export default function InvestorRequests() {
     acc[r.userId].push(r);
     return acc;
   }, {});
-  const totalValue = requests.reduce((sum, r) => sum + r.amount, 0);
+  // What all active investments are worth today (what the company owes investors right now)
+  const activeValueToday = requests
+    .filter(r => r.status === "approved")
+    .reduce((sum, r) => sum + (r.valueToday ?? r.amount), 0);
   const pendingCount  = requests.filter(r => r.status === "pending").length;
   const approvedCount = requests.filter(r => r.status === "approved").length;
 
@@ -85,8 +101,8 @@ export default function InvestorRequests() {
         {[
           { label: "Total Requests",    value: requests.length,                                color: "bg-gray-50 border-gray-200 text-[#111827]" },
           { label: "Pending Review",    value: pendingCount,                                   color: "bg-amber-50 border-amber-100 text-amber-700" },
-          { label: "Approved",          value: approvedCount,                                  color: "bg-[#E5F2D9] border-[#B4D330]/30 text-[#005B3F]" },
-          { label: "Total Value (R)",   value: `R ${totalValue.toLocaleString()}`,             color: "bg-blue-50 border-blue-100 text-blue-700" },
+          { label: "Active",            value: approvedCount,                                  color: "bg-[#E5F2D9] border-[#B4D330]/30 text-[#005B3F]" },
+          { label: "Active Value Today", value: rand(activeValueToday),                        color: "bg-blue-50 border-blue-100 text-blue-700" },
         ].map(card => (
           <div key={card.label} className={`rounded-xl border p-4 ${card.color}`}>
             <div className="text-xl font-bold">{card.value}</div>
@@ -97,7 +113,7 @@ export default function InvestorRequests() {
 
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
-        {["All", "Pending", "Approved", "Rejected"].map(f => (
+        {["All", "Pending", "Active", "Rejected"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={clsx("px-4 py-2 rounded-full text-sm font-bold transition-all border",
               filter === f
@@ -145,9 +161,23 @@ export default function InvestorRequests() {
                       </td>
                       <td className="px-6 py-4 font-bold text-[#005B3F] text-base">
                         R {req.amount.toLocaleString()}
+                        {req.status === "approved" && req.valueToday !== null ? (
+                          <div className="text-xs font-bold text-green-600 mt-0.5">
+                            Now {rand(req.valueToday)} (+{rand(req.valueToday - req.amount)})
+                          </div>
+                        ) : req.status === "pending" && (
+                          <div className="text-xs font-medium text-gray-500 mt-0.5">
+                            {rand(req.expectedAtMaturity)} at maturity
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                        {req.duration} months
+                        {req.status === "approved" ? `${req.monthsDone} of ${req.duration} months` : `${req.duration} months`}
+                        {req.maturityDate && (
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Matures {new Date(req.maturityDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className={clsx("inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border",
@@ -155,6 +185,7 @@ export default function InvestorRequests() {
                           <TrendingUp className="w-3.5 h-3.5" />
                           {req.riskLevel}
                         </span>
+                        <div className="text-xs text-gray-500 mt-1">{req.annualRate}% a year</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500 font-medium whitespace-nowrap">
                         {req.submittedAt}
