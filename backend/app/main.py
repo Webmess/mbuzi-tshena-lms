@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +8,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import init_db, SessionLocal
-from app.models import User, UserRole, FraudAlert, LoanApplication
+from app.models import User, UserRole, FraudAlert, LoanApplication, Document, ProofOfPayment, InvestmentDeposit, StoredFile
 from app.auth import get_password_hash
 from app.routers import auth, applications, payments, admin, documents
 from app.routers import notifications, proofs, investments
@@ -78,7 +79,24 @@ def seed_client():
         db.close()
     """
 
-
+def share_local_files():
+    """Copy files uploaded on this laptop (before stored_files existed) into the shared database."""
+    db = SessionLocal()
+    try:
+        saved = {path for (path,) in db.query(StoredFile.path).all()}
+        added = 0
+        for model in (Document, ProofOfPayment, InvestmentDeposit):
+            for row in db.query(model).all():
+                if row.file_path not in saved and os.path.exists(row.file_path):
+                    with open(row.file_path, "rb") as f:
+                        db.add(StoredFile(path=row.file_path, content=f.read()))
+                    saved.add(row.file_path)
+                    added += 1
+        if added:
+            db.commit()
+            logger.info(f"Shared {added} uploaded file(s) with the database")
+    finally:
+        db.close()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -86,6 +104,7 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_admin()
     fix_old_alert_text()
+    share_local_files()
     #seed_client()
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     logger.info("Mbudzi Tshena LMS API ready")

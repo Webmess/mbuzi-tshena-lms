@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
+from app.utils.file_store import store_file, restore_file
 from app.utils.risk_score import relative_date
 from app.utils.investment_interest import RATES, investment_figures
 from app.utils.deposit_check import run_deposit_check
@@ -269,7 +270,7 @@ async def upload_deposit(
     file_path = UPLOAD_DIR / f"{secrets.token_hex(8)}{Path(file.filename or 'file').suffix}"
     with open(file_path, "wb") as f:
         f.write(content)
-
+    store_file(db, str(file_path), content)
     dep = InvestmentDeposit(
         deposit_id="DEP-" + secrets.token_hex(3).upper(),
         investment_id=inv.id,
@@ -295,7 +296,7 @@ def get_deposit_file(
         raise HTTPException(status_code=404, detail="Deposit not found")
     if current_user.role != UserRole.ADMIN and dep.investment.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not os.path.exists(dep.file_path):
+    if not restore_file(db, dep.file_path):
         raise HTTPException(status_code=404, detail="File missing on server")
     return FileResponse(dep.file_path, media_type=dep.content_type)
 

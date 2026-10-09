@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
+from app.utils.file_store import store_file, restore_file
 from app.utils.risk_score import format_currency
 from app.utils.loan_balance import loan_totals, update_loan_balance
 from app.routers.payments import generate_trx_id
@@ -93,6 +94,7 @@ async def upload_proof(
     file_path = UPLOAD_DIR / f"{secrets.token_hex(8)}{ext}"
     with open(file_path, "wb") as f:
         f.write(content)
+    store_file(db, str(file_path), content)
      # Save a row in the database
     proof = ProofOfPayment(
         proof_id="POP-" + secrets.token_hex(3).upper(),
@@ -140,7 +142,7 @@ def get_proof_file(
         raise HTTPException(status_code=404, detail="Proof not found")
     if current_user.role != UserRole.ADMIN and proof.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    if not os.path.exists(proof.file_path):
+    if not restore_file(db, proof.file_path):
         raise HTTPException(status_code=404, detail="File missing on server")
     return FileResponse(proof.file_path, media_type=proof.content_type)
 
