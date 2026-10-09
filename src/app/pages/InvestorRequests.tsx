@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { TrendingUp, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { TrendingUp, CheckCircle2, Clock, XCircle, Eye } from "lucide-react";
 import clsx from "clsx";
 
 interface InvestorRequest {
@@ -16,13 +16,21 @@ interface InvestorRequest {
   valueToday: number | null;
   monthsDone: number;
   maturityDate: string | null;
+  stage: "pending" | "awaiting_deposit" | "active" | "rejected";
+  deposits: {
+    id: string;
+    file_name: string;
+    status: string;
+    check: { status: string; details: string | null; amount_found: number | null } | null;
+  }[];
 }
 const rand = (n: number) =>
   "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
-  approved: { label: "Active",       className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  awaiting_deposit: { label: "Awaiting deposit", className: "bg-blue-50 text-blue-700 border-blue-100", icon: <Clock className="w-3.5 h-3.5" /> },
+  active:   { label: "Active",         className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   rejected: { label: "Rejected",       className: "bg-red-50 text-red-700 border-red-100",           icon: <XCircle className="w-3.5 h-3.5" /> },
 };
 
@@ -52,6 +60,8 @@ export default function InvestorRequests() {
         valueToday: i.value_today,
         monthsDone: i.months_done,
         maturityDate: i.maturity_date,
+        stage: i.stage,
+        deposits: i.deposits,
       }))));
   useEffect(() => { loadRequests(); }, []);
   const [filter, setFilter]     = useState("All");
@@ -68,12 +78,30 @@ export default function InvestorRequests() {
     if (res.ok) loadRequests();
     else alert("Could not update the request");
   };
+   const reviewDeposit = async (depositId: string, status: "verified" | "rejected") => {
+    const admin_notes = status === "rejected" ? prompt("Reason for rejecting the deposit?") : null;
+    if (status === "rejected" && admin_notes === null) return; // admin pressed Cancel
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/deposits/${depositId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, admin_notes }),
+    });
+    if (res.ok) loadRequests();
+    else alert((await res.json()).detail ?? "Could not update the deposit");
+  };
+  const viewDeposit = async (depositId: string) => {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/deposits/${depositId}/file`, { credentials: "include" });
+    if (!res.ok) { alert("Could not open file"); return; }
+    window.open(URL.createObjectURL(await res.blob()), "_blank");
+  };
 
   const filtered = requests.filter(r =>
     filter === "All" ||
-    (filter === "Pending"  && r.status === "pending")  ||
-    (filter === "Active"   && r.status === "approved") ||
-    (filter === "Rejected" && r.status === "rejected")
+    (filter === "Pending"          && r.stage === "pending")          ||
+    (filter === "Awaiting deposit" && r.stage === "awaiting_deposit") ||
+    (filter === "Active"           && r.stage === "active")           ||
+    (filter === "Rejected"         && r.stage === "rejected")
   );
   const groups = filtered.reduce<Record<string, InvestorRequest[]>>((acc, r) => {
     if (!acc[r.userId]) acc[r.userId] = [];
@@ -82,10 +110,10 @@ export default function InvestorRequests() {
   }, {});
   // What all active investments are worth today (what the company owes investors right now)
   const activeValueToday = requests
-    .filter(r => r.status === "approved")
+    .filter(r => r.stage === "active")
     .reduce((sum, r) => sum + (r.valueToday ?? r.amount), 0);
   const pendingCount  = requests.filter(r => r.status === "pending").length;
-  const approvedCount = requests.filter(r => r.status === "approved").length;
+  const approvedCount = requests.filter(r => r.stage === "active").length;
 
   return (
     <div className="space-y-6">
@@ -113,7 +141,7 @@ export default function InvestorRequests() {
 
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
-        {["All", "Pending", "Active", "Rejected"].map(f => (
+        {["All", "Pending", "Awaiting deposit", "Active", "Rejected"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={clsx("px-4 py-2 rounded-full text-sm font-bold transition-all border",
               filter === f
@@ -153,7 +181,8 @@ export default function InvestorRequests() {
                       </td>
                     </tr>
                     {userReqs.map(req => {
-                  const cfg = statusConfig[req.status];
+                  const cfg = statusConfig[req.stage];
+                  const latestDeposit = req.deposits[0]; // newest first
                   return (
                     <tr key={req.id} className="hover:bg-[#F4F6F8] transition-colors">
                       <td className="px-6 py-4">
@@ -161,7 +190,7 @@ export default function InvestorRequests() {
                       </td>
                       <td className="px-6 py-4 font-bold text-[#005B3F] text-base">
                         R {req.amount.toLocaleString()}
-                        {req.status === "approved" && req.valueToday !== null ? (
+                        {req.stage === "active" && req.valueToday !== null ? (
                           <div className="text-xs font-bold text-green-600 mt-0.5">
                             Now {rand(req.valueToday)} (+{rand(req.valueToday - req.amount)})
                           </div>
@@ -172,7 +201,7 @@ export default function InvestorRequests() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                        {req.status === "approved" ? `${req.monthsDone} of ${req.duration} months` : `${req.duration} months`}
+                        {req.stage === "active" ? `${req.monthsDone} of ${req.duration} months` : `${req.duration} months`}
                         {req.maturityDate && (
                           <div className="text-xs text-gray-500 mt-0.5">
                             Matures {new Date(req.maturityDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
@@ -195,6 +224,22 @@ export default function InvestorRequests() {
                           {cfg.icon}
                           {cfg.label}
                         </span>
+                        {latestDeposit && (
+                          <div className="mt-1.5 text-xs max-w-[240px]">
+                            <button onClick={() => viewDeposit(latestDeposit.id)} className="inline-flex items-center gap-1 text-[#005B3F] font-bold hover:underline">
+                              <Eye className="w-3 h-3" />
+                              {latestDeposit.file_name}
+                            </button>
+                            <div className="text-gray-500">
+                              Deposit {latestDeposit.status}
+                              {latestDeposit.check && ` · check ${latestDeposit.check.status}`}
+                              {latestDeposit.check?.amount_found != null && ` · ${rand(latestDeposit.check.amount_found)}`}
+                            </div>
+                            {latestDeposit.check?.details && (
+                              <p className="text-amber-700 whitespace-pre-line">{latestDeposit.check.details}</p>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -205,7 +250,21 @@ export default function InvestorRequests() {
                               Approve
                             </button>
                           )}
-                          {req.status !== "rejected" && (
+                          {latestDeposit?.status === "pending" && (
+                            <>
+                              <button onClick={() => reviewDeposit(latestDeposit.id, "verified")}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#E5F2D9] text-[#005B3F] border border-[#B4D330]/30 hover:bg-[#B4D330]/30 transition-colors flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                Verify deposit
+                              </button>
+                              <button onClick={() => reviewDeposit(latestDeposit.id, "rejected")}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors flex items-center gap-1">
+                                <XCircle className="w-3.5 h-3.5" />
+                                Reject deposit
+                              </button>
+                            </>
+                          )}
+                          {req.stage === "pending" && (
                             <button onClick={() => updateStatus(req.id, "rejected")}
                               className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors flex items-center gap-1">
                               <XCircle className="w-3.5 h-3.5" />

@@ -355,6 +355,9 @@ class Investment(Base):
 
     user: Mapped["User"] = relationship("User")
     term: Mapped[Optional["InvestmentTerm"]] = relationship("InvestmentTerm")
+    deposits: Mapped[List["InvestmentDeposit"]] = relationship(
+        "InvestmentDeposit", back_populates="investment", order_by="InvestmentDeposit.uploaded_at.desc()"
+    )
 
 
 class InvestmentTerm(Base):
@@ -366,3 +369,25 @@ class InvestmentTerm(Base):
     annual_rate: Mapped[float] = mapped_column(Float, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
 
+class InvestmentDeposit(Base):
+    """Proof that the customer paid the investment money in, plus the result of the automatic check."""
+    __tablename__ = "investment_deposits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    deposit_id: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    investment_id: Mapped[int] = mapped_column(Integer, ForeignKey("investments.id"), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending / verified / rejected
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Filled in by app/utils/deposit_check.py
+    check_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # passed / mismatch / unreadable
+    check_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    amount_found: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
+    paid_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    investment: Mapped["Investment"] = relationship("Investment", back_populates="deposits")

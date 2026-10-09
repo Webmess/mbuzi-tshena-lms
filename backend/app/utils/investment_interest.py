@@ -24,10 +24,10 @@ def investment_figures(inv: Investment) -> dict:
         "value_today": None,
         "interest_earned": None,
     }
-    if inv.status != InvestmentStatus.APPROVED:
-        return figures
-    # Approved before investment_terms existed: count from the request date
-    start = inv.term.start_date if inv.term else inv.created_at.date()
+    if inv.status != InvestmentStatus.APPROVED or not inv.term:
+        return figures  # only grows once the deposit has been verified
+
+    start = inv.term.start_date
     maturity = start + relativedelta(months=inv.duration_months)
     today = min(max(date.today(), start), maturity)
 

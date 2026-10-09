@@ -87,10 +87,20 @@ interface InvestmentRecord {
   months_done: number;
   value_today: number | null;
   interest_earned: number | null;
+  stage: "pending" | "awaiting_deposit" | "active" | "rejected";
+  pay_to: { account_name: string; bank: string; account_number: string; branch_code: string } | null;
+  deposits: {
+    id: string;
+    file_name: string;
+    status: string;
+    admin_notes: string | null;
+  }[];
 }
+
 const INVESTMENT_STATUS: Record<string, { label: string; className: string }> = {
-  pending:  { label: "Pending",  className: "bg-amber-50 text-amber-700 border-amber-100" },
-  approved: { label: "Active",   className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30" },
+  pending:          { label: "Pending",          className: "bg-amber-50 text-amber-700 border-amber-100" },
+  awaiting_deposit: { label: "Awaiting deposit", className: "bg-blue-50 text-blue-700 border-blue-100" },
+  active:           { label: "Active",           className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-100" },
 };
 
@@ -430,12 +440,34 @@ export default function UserDashboard() {
   const [showInvestorModal, setShowInvestorModal] = useState(false);
   const [investments, setInvestments] = useState<InvestmentRecord[]>([]);
 
-  useEffect(() => {
-    if (!user) return;
+ const loadInvestments = () =>
     fetch(`${import.meta.env.VITE_API_URL}/api/investments/me`, { credentials: "include" })
       .then(res => res.ok ? res.json() : [])
       .then(setInvestments);
+
+  useEffect(() => {
+    if (!user) return;
+    loadInvestments();
   }, [user]);
+  const handleDepositUpload = async (investmentId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow choosing the same file again
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/${investmentId}/deposit`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (res.ok) loadInvestments();
+    else alert((await res.json()).detail ?? "Upload failed");
+  };
+  const handleViewDeposit = async (depositId: string) => {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/deposits/${depositId}/file`, { credentials: "include" });
+    if (!res.ok) { alert("Could not open file"); return; }
+    window.open(URL.createObjectURL(await res.blob()), "_blank");
+  };
 
   const handleInvestorSubmit = async (data: InvestorFormData) => {
    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments`, {
@@ -450,16 +482,16 @@ export default function UserDashboard() {
     return true;
   };
   const totalInvested = useMemo(
-    () => investments.filter(i => i.status === "approved").reduce((sum, i) => sum + i.amount, 0),
+    () => investments.filter(i => i.stage === "active").reduce((sum, i) => sum + i.amount, 0),
     [investments]
   );
   const pendingInvested = useMemo(
-    () => investments.filter(i => i.status === "pending").reduce((sum, i) => sum + i.amount, 0),
+    () => investments.filter(i => i.stage === "pending" || i.stage === "awaiting_deposit").reduce((sum, i) => sum + i.amount, 0),
     [investments]
   );
   // What the active investments are worth today, and how much they have grown so far
   const investedValueToday = useMemo(
-    () => investments.filter(i => i.status === "approved").reduce((sum, i) => sum + (i.value_today ?? i.amount), 0),
+    () => investments.filter(i => i.stage === "active").reduce((sum, i) => sum + (i.value_today ?? i.amount), 0),
     [investments]
   );
   const investmentGrowth = investedValueToday - totalInvested;
@@ -1156,7 +1188,7 @@ else alert("Upload failed");};
               </div>
             ) : (
               investments.map(inv => {
-                const cfg = INVESTMENT_STATUS[inv.status] ?? INVESTMENT_STATUS.pending;
+                const cfg = INVESTMENT_STATUS[inv.stage] ?? INVESTMENT_STATUS.pending;
                 return (
                   <div key={inv.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5">
                     <div className="flex flex-wrap items-start gap-4">
@@ -1173,7 +1205,7 @@ else alert("Upload failed");};
                       </div>
                       <div className="text-xl font-black text-[#005B3F] shrink-0">{formatMoney(inv.amount)}</div>
                     </div>
-                    {inv.status === "approved" && inv.value_today !== null ? (
+                    {inv.stage === "active" && inv.value_today !== null ? (
                       <div className="mt-3 pt-3 border-t border-gray-100">
                         <div className="grid grid-cols-3 gap-3 text-xs mb-3">
                           <div>
@@ -1201,7 +1233,32 @@ else alert("Upload failed");};
                           <span>Matures {formatDate(inv.maturity_date!)}</span>
                         </div>
                       </div>
-                       ) : inv.status === "pending" ? (
+                       ) : inv.stage === "awaiting_deposit" && inv.pay_to ? (
+                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                        <p className="text-xs text-gray-600 leading-relaxed">
+                          Approved. Pay <strong>{formatMoney(inv.amount)}</strong> into <strong>{inv.pay_to.account_name}</strong>,{" "}
+                          {inv.pay_to.bank} account {inv.pay_to.account_number} (branch {inv.pay_to.branch_code}), with reference{" "}
+                          <strong>{inv.id}</strong>. Your investment starts growing once we have verified your deposit.
+                        </p>
+                        {inv.deposits.some(d => d.status === "pending") ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-100">
+                            <Clock className="w-3.5 h-3.5" />
+                            Proof of deposit under review
+                          </span>
+                        ) : (
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-[#005B3F] text-[#005B3F] rounded-lg text-xs font-bold cursor-pointer hover:bg-[#005B3F] hover:text-white transition-colors">
+                            <Upload className="w-3.5 h-3.5" />
+                            Upload Proof of Deposit
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="hidden"
+                              onChange={e => handleDepositUpload(inv.id, e)}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ) : inv.stage === "pending" ? (
                       <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
                         Waiting for approval. Expected value after {inv.duration} months:{" "}
                         <span className="font-bold text-[#005B3F]">{formatMoney(inv.expected_at_maturity)}</span>
@@ -1210,6 +1267,27 @@ else alert("Upload failed");};
                       <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-red-600">
                         Reason: {inv.admin_notes || "No reason given"}
                       </p>
+                    )}
+                    {inv.deposits.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                        {inv.deposits.map(d => (
+                          <div key={d.id} className="text-xs text-gray-500">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-3.5 h-3.5 text-[#005B3F]" />
+                              <span className="font-medium text-[#005B3F]">{d.file_name}</span>
+                              <span className={d.status === "rejected" ? "text-red-600 font-bold" : d.status === "verified" ? "text-[#005B3F] font-bold" : "text-gray-400"}>
+                                — {d.status}
+                              </span>
+                              <button onClick={() => handleViewDeposit(d.id)} className="ml-auto inline-flex items-center gap-1 text-[#005B3F] font-bold hover:underline">
+                                <Eye className="w-3.5 h-3.5" /> View
+                              </button>
+                            </div>
+                            {d.status === "rejected" && (
+                              <p className="ml-5 mt-1 text-red-600">Reason: {d.admin_notes || "No reason given"}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 );
