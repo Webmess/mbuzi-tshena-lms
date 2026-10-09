@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +8,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 
 TEMPLATE_PATH = BASE_DIR / "email-confirmation-template.html"
 LOGIN_ALERT_TEMPLATE_PATH = BASE_DIR / "email-login-alert-template.html"
@@ -480,12 +480,13 @@ def _replace_template_values(
 
 
 
-def render_confirmation_email(
+def render_application_email(
     applicant_name: str,
     reference_number: str,
     loan_amount: float,
 ) -> str:
- 
+
+    now = datetime.now(timezone(timedelta(hours=2)))
     html = _load_template(
         TEMPLATE_PATH,
         FALLBACK_TEMPLATE,
@@ -497,6 +498,12 @@ def render_confirmation_email(
             "APPLICANT_NAME": applicant_name,
             "REFERENCE_NUMBER": reference_number,
             "LOAN_AMOUNT": f"{loan_amount:,.0f}",
+            "SUBMISSION_DATE": now.strftime("%d %B %Y"),
+            "SUBMISSION_TIME": now.strftime("%H:%M"),
+            "DASHBOARD_URL": f"{settings.FRONTEND_URL}/dashboard",
+            "TERMS_URL": settings.FRONTEND_URL,
+            "PRIVACY_URL": settings.FRONTEND_URL,
+            "UNSUBSCRIBE_URL": settings.FRONTEND_URL,
         },
     )
 
@@ -652,7 +659,7 @@ async def send_application_confirmation(
         f"{reference_number} | Mbudzi Tshena"
     )
 
-    body = render_confirmation_email(
+    body = render_application_email(
         applicant_name=applicant_name,
         reference_number=reference_number,
         loan_amount=loan_amount,
