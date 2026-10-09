@@ -15,6 +15,7 @@ import PaymentsTracker from "./pages/PaymentsTracker";
 import BorrowersList from "./pages/BorrowersList";
 import ProofOfPayments from "./pages/ProofOfPayments";
 import InvestorRequests from "./pages/InvestorRequests";
+import ChatbotQuestions from "./pages/ChatbotQuestions";
 
 import UserSignUp from "./pages/UserSignUp";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -120,6 +121,10 @@ export const router = createBrowserRouter([
               {
                 path: "investors",
                 Component: InvestorRequests,
+              },
+              {
+                path: "chatbot",
+                Component: ChatbotQuestions,
               },
             ],
           },

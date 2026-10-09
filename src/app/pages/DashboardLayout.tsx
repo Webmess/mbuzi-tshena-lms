@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Receipt,
-  TrendingUp
+  TrendingUp,
+  MessageCircle
 } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "../components/Logo";
@@ -65,6 +66,7 @@ export default function DashboardLayout() {
     { name: "Payments", path: "/admin/payments", icon: CreditCard },
     { name: "Borrowers", path: "/admin/borrowers", icon: Users },
     { name: "Proof of Payments", path: "/admin/proofs", icon: Receipt },
+    { name: "Chatbot Questions", path: "/admin/chatbot", icon: MessageCircle },
     { name: "Investor Requests", path: "/admin/investors", icon: TrendingUp },
   ];
 
