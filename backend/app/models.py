@@ -320,6 +320,20 @@ class ProofOfPayment(Base):
 
     user: Mapped["User"] = relationship("User")
     application: Mapped["LoanApplication"] = relationship("LoanApplication")
+    check: Mapped[Optional["ProofCheck"]] = relationship("ProofCheck")
+
+
+class ProofCheck(Base):
+    __tablename__ = "proof_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    proof_id: Mapped[int] = mapped_column(Integer, ForeignKey("proofs_of_payment.id"), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # passed / mismatch / unreadable
+    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    amount_found: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
+    paid_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class InvestmentStatus(str, enum.Enum):
     PENDING = "pending"
