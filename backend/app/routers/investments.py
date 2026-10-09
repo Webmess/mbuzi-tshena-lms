@@ -1,4 +1,5 @@
 import secrets
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,13 +7,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, Investment, InvestmentStatus, Notification, NotificationType
+from app.models import User, Investment, InvestmentStatus, InvestmentTerm, Notification, NotificationType
 from app.auth import get_current_user, get_current_admin
 from app.utils.risk_score import relative_date
+from app.utils.investment_interest import RATES, investment_figures
 
 router = APIRouter(prefix="/api/investments", tags=["Investments"])
 
-RISK_LEVELS = {"Conservative", "Moderate", "Aggressive"}
+RISK_LEVELS = set(RATES)
 
 
 class InvestmentCreate(BaseModel):
@@ -35,6 +37,8 @@ def investment_to_dict(i: Investment) -> dict:
         "status": i.status.value,
         "admin_notes": i.admin_notes,
         "submitted_at": relative_date(i.created_at),
+        "created_at": i.created_at.isoformat(),
+        **investment_figures(i),
     }
 
 # Customer submits a request
@@ -95,7 +99,9 @@ def review_investment(
 
     inv.status = review.status
     inv.admin_notes = review.admin_notes
-
+    if review.status == InvestmentStatus.APPROVED and not inv.term:
+        # The investment starts today, at the rate for its risk level
+        db.add(InvestmentTerm(investment_id=inv.id, annual_rate=RATES[inv.risk_level], start_date=date.today()))
     if review.status == InvestmentStatus.APPROVED:
         db.add(Notification(
             user_id=inv.user_id,

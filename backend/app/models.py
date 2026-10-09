@@ -354,4 +354,15 @@ class Investment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship("User")
+    term: Mapped[Optional["InvestmentTerm"]] = relationship("InvestmentTerm")
+
+
+class InvestmentTerm(Base):
+    """When an investment started and at what yearly rate (fixed for its whole duration)."""
+    __tablename__ = "investment_terms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    investment_id: Mapped[int] = mapped_column(Integer, ForeignKey("investments.id"), unique=True, nullable=False)
+    annual_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
 
