@@ -178,7 +178,9 @@ export default function LoanApplication() {
     return idYear !== dobYear || idMonth !== dobMonth || idDay !== dobDay;
   }, [watchedIdNumber, watchedDob]);
 
-  const user = { name: "Sipho" };
+ // The logged-in customer (ProtectedRoute saves it in sessionStorage when the page opens)
+  const user = JSON.parse(sessionStorage.getItem("user") ?? "{}");
+  const displayName: string = user.full_name || "Customer";
 
   const totalSteps = 6;
   const progressPercent = (currentStep / totalSteps) * 100;
@@ -365,9 +367,9 @@ export default function LoanApplication() {
               </button>
               <div className="flex items-center gap-3 border-l border-white/20 pl-6">
                 <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm">
-                  {user.name.charAt(0)}
+                  {displayName.charAt(0)}
                 </div>
-                <span className="font-medium hidden sm:block">{user.name}</span>
+                <span className="font-medium hidden sm:block">{displayName}</span>
                 <button
                   onClick={() => navigate("/login")}
                   className="ml-2 text-white/80 hover:text-white transition-colors flex items-center gap-1"
