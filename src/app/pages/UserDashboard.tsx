@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { Logo } from "../components/Logo";
+import { Chatbot } from "../components/Chatbot";
 import { useState, useEffect, useMemo, useRef } from "react";
 
 /* ─── Real notifications API shape ───────────────────────────────── */
@@ -1316,6 +1317,7 @@ else alert("Upload failed");};
           onSubmit={handleInvestorSubmit}
         />
       )}
+      <Chatbot />
     </div>
   );
 }
