@@ -299,6 +299,11 @@ class PaymentListItem(BaseModel):
 
 
 # ========== Document ==========
+class DocumentCheckOut(BaseModel):
+    status: str
+    details: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 class DocumentOut(BaseModel):
     id: int
     application_id: int
@@ -308,6 +313,7 @@ class DocumentOut(BaseModel):
     file_size: int
     document_type: Optional[str]
     uploaded_at: datetime
+    check: Optional[DocumentCheckOut] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -8,6 +8,14 @@ import clsx from "clsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const PAGE_SIZE = 20;
+
+// Result of the automatic document check (backend/app/utils/doc_check.py)
+const CHECK_BADGES: Record<string, { label: string; className: string }> = {
+  passed:     { label: "Verified",    className: "bg-green-100 text-green-700 border-green-200" },
+  mismatch:   { label: "Mismatch",    className: "bg-amber-100 text-amber-700 border-amber-200" },
+  unreadable: { label: "Unreadable",  className: "bg-gray-100 text-gray-600 border-gray-200" },
+  skipped:    { label: "Not checked", className: "bg-gray-100 text-gray-600 border-gray-200" },
+};
 const FILTERS = ["All", "Pending Review", "Auto-Approved", "Flagged"];
 
 function formatDate(value: string | null | undefined): string {
@@ -47,7 +55,12 @@ interface LoanRequestDetail extends LoanRequestListItem {
   accountType: string;
   repaymentProbability: number;
   aiExplanation: string;
-  documents: { id: number; original_filename: string; document_type: string | null }[];
+  documents: {
+    id: number;
+    original_filename: string;
+    document_type: string | null;
+    check: { status: string; details: string | null } | null;
+  }[];
   decisionReason: string;
   overrideHistory: { status: string; comment: string; by: string; at: string } | null;
   amountValue: number;
@@ -310,10 +323,32 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
                   <div className="w-8 h-8 bg-[#E5F2D9] rounded-lg flex items-center justify-center shrink-0">
                     <FileText className="w-4 h-4 text-[#005B3F]" />
                   </div>
-                  <span className="text-sm font-medium text-gray-800">{doc.original_filename}</span>
-                  {doc.document_type && (
-                    <span className="text-xs text-gray-500">({doc.document_type.replace(/_/g, " ")})</span>
-                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-800">{doc.original_filename}</span>
+                      {doc.document_type && (
+                        <span className="text-xs text-gray-500">({doc.document_type.replace(/_/g, " ")})</span>
+                      )}
+                      {doc.check && (
+                        <span className={clsx(
+                          "inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md border",
+                          (CHECK_BADGES[doc.check.status] ?? CHECK_BADGES.skipped).className
+                        )}>
+                          {doc.check.status === "passed" && <CheckCircle2 className="w-3 h-3" />}
+                          {doc.check.status === "mismatch" && <AlertCircle className="w-3 h-3" />}
+                          {(CHECK_BADGES[doc.check.status] ?? CHECK_BADGES.skipped).label}
+                        </span>
+                      )}
+                      </div>
+                    {doc.check?.details && (
+                      <p className={clsx(
+                        "text-xs mt-1 whitespace-pre-line",
+                        doc.check.status === "mismatch" ? "text-amber-700" : "text-gray-500"
+                      )}>
+                        {doc.check.details}
+                      </p>
+                    )}
+                  </div>
                   <button
                     title="View document"
                     onClick={async () => {

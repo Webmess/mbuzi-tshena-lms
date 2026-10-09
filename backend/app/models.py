@@ -254,6 +254,7 @@ class Document(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     application: Mapped["LoanApplication"] = relationship("LoanApplication", back_populates="documents")
+    check: Mapped[Optional["DocumentCheck"]] = relationship("DocumentCheck")
 
 class DocumentCheck(Base):
     __tablename__ = "document_checks"
