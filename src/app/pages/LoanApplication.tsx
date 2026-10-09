@@ -163,7 +163,9 @@ export default function LoanApplication() {
   const showWorkDetails = ["employed", "part-time", "contract", "self-employed"].includes(employmentStatus);
  // Which documents to show, and which of those must be uploaded
   const visibleDocs = DOCUMENT_TYPES.filter((d) => !d.selfEmployedOnly || isSelfEmployed);
-  const requiredDocs = visibleDocs.filter((d) => !d.optional);
+  // Without a job there is no payslip: a grant / pension letter is optional and the bank statement shows the income
+  const noPayslip = ["unemployed", "retired"].includes(employmentStatus);
+  const requiredDocs = visibleDocs.filter((d) => !d.optional && !(d.type === "payslip" && noPayslip));
 
   const idDobMismatch = useMemo(() => {
     if (!watchedIdNumber || watchedIdNumber.length !== 13 || !watchedDob) return false;
@@ -1356,7 +1358,7 @@ export default function LoanApplication() {
                           </div>
                           <div>
                             <p className="font-bold text-gray-900 text-sm">
-                              {doc.label} {doc.optional ? <span className="font-normal text-gray-500">(optional)</span> : "*"}
+                              {doc.label} {requiredDocs.includes(doc) ? "*" : <span className="font-normal text-gray-500">(optional)</span>}
                             </p>
                             <p className="text-xs text-gray-500">
                               {file ? `${file.name} · ${formatFileSize(file.size)}` : doc.hint}
