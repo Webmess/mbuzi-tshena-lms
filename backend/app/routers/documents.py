@@ -12,6 +12,7 @@ from app.utils.doc_check import run_document_check
 from app.schemas import DocumentOut, Message
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
+from app.utils.file_store import store_file, restore_file, delete_stored_file
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -65,6 +66,7 @@ async def upload_document(
     file_path = UPLOAD_DIR / safe_name
     with open(file_path, "wb") as f:
         f.write(content)
+    store_file(db, str(file_path), content)
 
     doc = Document(
         application_id=application_id,
@@ -124,6 +126,7 @@ def delete_document(
         pass
 
     db.query(DocumentCheck).filter(DocumentCheck.document_id == doc.id).delete()
+    delete_stored_file(db, doc.file_path)
     db.delete(doc)
     db.commit()
     return Message(message="Document deleted")
@@ -142,6 +145,6 @@ def get_document_file(
     if current_user.role != UserRole.ADMIN and (not app or app.user_id != current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not os.path.exists(doc.file_path):
+    if not restore_file(db, doc.file_path):
         raise HTTPException(status_code=404, detail="File missing on server")
     return FileResponse(doc.file_path, media_type=doc.content_type)

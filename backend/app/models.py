@@ -2,7 +2,7 @@ from datetime import datetime, date
 from typing import Optional, List
 from sqlalchemy import (
     String, Integer, Float, Boolean, DateTime, Date, Text, ForeignKey,
-    Enum as SAEnum, Numeric
+    Enum as SAEnum, Numeric, LargeBinary
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
@@ -399,3 +399,13 @@ class InvestmentPayout(Base):
     investment_id: Mapped[int] = mapped_column(Integer, ForeignKey("investments.id"), unique=True, nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     paid_on: Mapped[date] = mapped_column(Date, nullable=False)
+
+class StoredFile(Base):
+    """A copy of every uploaded file (documents, proofs, deposits), so all laptops can open it."""
+    __tablename__ = "stored_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    path: Mapped[str] = mapped_column(String(500), unique=True, index=True, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)   
+
