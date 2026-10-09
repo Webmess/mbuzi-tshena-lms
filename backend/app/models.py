@@ -407,5 +407,21 @@ class StoredFile(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     path: Mapped[str] = mapped_column(String(500), unique=True, index=True, nullable=False)
     content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)   
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow) 
+
+class ChatbotInteraction(Base):
+    """One question to the chatbot and its answer (SRS class #8: ChatbotInteraction)."""
+    __tablename__ = "chatbot_interactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)                      # ChatID
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)      # UserID
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)                              # QueryText
+    response_text: Mapped[str] = mapped_column(Text, nullable=False)                           # ResponseText
+    query_category: Mapped[str] = mapped_column(String(30), nullable=False)                    # QueryCategory
+    interaction_status: Mapped[str] = mapped_column(String(20), nullable=False)                # answered / unsupported
+    escalation_flag: Mapped[bool] = mapped_column(Boolean, default=False)                      # EscalationFlag
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)           # InteractionDate
+
+    user: Mapped["User"] = relationship("User")
+
 
