@@ -1,4 +1,5 @@
 import logging
+from html import escape
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -749,5 +750,107 @@ async def send_confirmation_email(
     return await send_email(
         to_email=to_email,
         subject=subject,
+        html_body=body,
+    )
+
+# ========== Investment emails ==========
+INVESTMENT_EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{HEADING}}</title>
+</head>
+<body style="margin:0;padding:0;background:#F3F6F8;font-family:Arial,Helvetica,sans-serif;color:#17212B;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F6F8;padding:35px 15px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#FFFFFF;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="background:#063D2E;padding:28px 32px;">
+              <div style="font-size:23px;font-weight:700;color:#FFFFFF;">Mbudzi Tshena</div>
+              <div style="font-size:12px;color:#B9D8CD;margin-top:4px;letter-spacing:.4px;">FINANCIAL SOLUTIONS</div>
+              </td>
+          </tr>
+          <tr>
+            <td style="padding:35px 32px 15px;">
+              <div style="font-size:13px;font-weight:700;color:#C47A00;text-transform:uppercase;letter-spacing:.7px;">Investments</div>
+              <h1 style="margin:8px 0 12px;font-size:26px;line-height:1.25;color:#17212B;">{{HEADING}}</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;color:#59656F;">Hi {{CUSTOMER_NAME}}, {{INTRO}}</p>
+            </td>
+          </tr>
+          <tr>
+          <td style="padding:20px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F8F5;border:1px solid #D5EAE1;border-radius:10px;">
+                {{DETAILS}}
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 32px 30px;">
+              <p style="margin:0;font-size:13px;line-height:1.7;color:#68747C;">{{NOTE}}</p>
+              <p style="margin:18px 0 0;"><a href="{{DASHBOARD_URL}}" style="display:inline-block;background:#063D2E;color:#FFFFFF;text-decoration:none;font-size:14px;font-weight:700;padding:12px 22px;border-radius:8px;">Open my dashboard</a></p>
+            </td>
+          </tr>
+          <tr>
+          <td style="padding:30px 32px;background:#F8FAFB;">
+              <div style="font-size:13px;font-weight:700;color:#063D2E;margin-bottom:7px;">Mbudzi Tshena Financial Solutions</div>
+              <div style="font-size:11px;line-height:1.7;color:#87929A;">This is an automated email. Please do not reply directly.<br><br>&copy; {{CURRENT_YEAR}} Mbudzi Tshena Financial Solutions. All rights reserved.</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
+def render_investment_email(
+    customer_name: str,
+    heading: str,
+    intro: str,
+    details: dict,
+    note: str = "",
+) -> str:
+    # One row per detail, e.g. {"Reference": "INV-DDC5C4", "Amount": "R2,500.00"}
+    rows = "".join(
+        f'<tr><td style="padding:10px 18px;font-size:13px;color:#68747C;">{escape(str(label))}</td>'
+        f'<td style="padding:10px 18px;font-size:14px;font-weight:700;color:#063D2E;text-align:right;">{escape(str(value))}</td></tr>'
+        for label, value in details.items()
+    )
+    return _replace_template_values(
+        INVESTMENT_EMAIL_TEMPLATE,
+        {
+            "CUSTOMER_NAME": escape(customer_name),
+            "HEADING": escape(heading),
+            "INTRO": escape(intro),
+            "DETAILS": rows,
+            "NOTE": escape(note),
+            "DASHBOARD_URL": f"{settings.FRONTEND_URL}/dashboard",
+            "CURRENT_YEAR": datetime.now().year,
+        },
+    )
+
+async def send_investment_email(
+    to_email: str,
+    subject: str,
+    customer_name: str,
+    heading: str,
+    intro: str,
+    details: dict,
+    note: str = "",
+) -> bool:
+    body = render_investment_email(
+        customer_name=customer_name,
+        heading=heading,
+        intro=intro,
+        details=details,
+        note=note,
+    )
+    return await send_email(
+        to_email=to_email,
+        subject=f"{subject} | Mbudzi Tshena",
         html_body=body,
     )
