@@ -13,10 +13,13 @@ from app.database import get_db
 from app.models import (
     User, UserRole, LoanApplication, ApplicationStatus,
     ProofOfPayment, ProofStatus, Notification, NotificationType,
+    Payment, PaymentType, PaymentStatus,
 )
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
 from app.utils.risk_score import format_currency
+from app.utils.loan_balance import loan_totals, update_loan_balance
+from app.routers.payments import generate_trx_id
 
 router = APIRouter(prefix="/api/proofs", tags=["Proof of Payment"])
 
@@ -25,7 +28,17 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/jpg"}
 
+def proof_payment(p: ProofOfPayment):
+    """The repayment that was recorded when this proof was verified (if any)."""
+    loan = p.application.loan if p.application else None
+    if not loan:
+        return None
+    return next((pay for pay in loan.payments if pay.reference == p.proof_id), None)
+
+
 def proof_to_dict(p: ProofOfPayment) -> dict:
+    loan = p.application.loan if p.application else None
+    payment = proof_payment(p)
     return {
         "id": p.proof_id,
         "user_name": p.user.full_name if p.user else "Unknown",
@@ -37,6 +50,8 @@ def proof_to_dict(p: ProofOfPayment) -> dict:
         "uploaded_at": p.uploaded_at,
         "status": p.status.value,
         "admin_notes": p.admin_notes,
+        "amount_paid": float(payment.amount) if payment and payment.status == PaymentStatus.COMPLETED else None,
+        "loan_totals": loan_totals(loan) if loan else None,
     }
 
 @router.post("/upload/{reference_number}", status_code=201)
@@ -54,6 +69,13 @@ async def upload_proof(
         raise HTTPException(status_code=403, detail="Not authorized")
     if app.status != ApplicationStatus.APPROVED:
         raise HTTPException(status_code=400, detail="You can only upload proof for an approved loan")
+    if app.loan and app.loan.status == "Paid Off":
+        raise HTTPException(status_code=400, detail="This loan is already paid off")
+    if db.query(ProofOfPayment).filter(
+        ProofOfPayment.application_id == app.id,
+        ProofOfPayment.status == ProofStatus.PENDING,
+    ).first():
+        raise HTTPException(status_code=400, detail="Your last proof of payment is still being reviewed")
       #  Check file type and size 
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only PDF, JPG or PNG allowed")
@@ -117,6 +139,7 @@ def get_proof_file(
 class ProofReview(BaseModel):
     status: ProofStatus
     admin_notes: Optional[str] = None
+    amount: Optional[float] = None  # how much the proof shows was paid
 
 @router.patch("/{proof_id}")
 def review_proof(
@@ -129,16 +152,47 @@ def review_proof(
     if not proof:
         raise HTTPException(status_code=404, detail="Proof not found")
 
+    loan = proof.application.loan
+    payment = proof_payment(proof)
+
+    if review.status == ProofStatus.VERIFIED:
+        if not loan:
+            raise HTTPException(status_code=400, detail="This application has no loan yet")
+        if not review.amount or review.amount <= 0:
+            raise HTTPException(status_code=400, detail="Enter the amount that was paid")
+        if payment:  # verified before, then rejected: switch the same payment back on
+            payment.amount = review.amount
+            payment.status = PaymentStatus.COMPLETED
+        else:
+            db.add(Payment(
+                transaction_id=generate_trx_id(),
+                loan=loan,
+                user_id=proof.user_id,
+                amount=review.amount,
+                payment_type=PaymentType.REPAYMENT,
+                status=PaymentStatus.COMPLETED,
+                payment_method="EFT",
+                reference=proof.proof_id,
+                notes="Recorded from proof of payment",
+                processed_at=datetime.utcnow(),
+            ))
+    elif payment:  # a verified proof is rejected after all: cancel its payment
+        payment.status = PaymentStatus.CANCELLED
+
     proof.status = review.status
     proof.admin_notes = review.admin_notes
+    totals = update_loan_balance(loan) if loan else None
 
     ref = proof.application.reference_number
     if review.status == ProofStatus.VERIFIED:
         db.add(Notification(
             user_id=proof.user_id,
             type=NotificationType.PROOF_ACCEPTED,
-            message=f"Your proof of payment for loan {ref} has been verified.",
-        ))
+            message=(
+                f"Your payment of R{review.amount:,.2f} for loan {ref} has been verified. "
+                f"Remaining balance: R{totals['balance']:,.2f}."
+            ),
+        ))        
     elif review.status == ProofStatus.REJECTED:
         db.add(Notification(
             user_id=proof.user_id,

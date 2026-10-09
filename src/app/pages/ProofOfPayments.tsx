@@ -12,8 +12,11 @@ interface ProofRecord {
   uploadedAt: string;
   loanAmount: string;
   status: "pending" | "verified" | "rejected";
+  amountPaid: number | null;
+  totals: { total_repayable: number; amount_paid: number; balance: number } | null;
 }
-
+const rand = (n: number) =>
+  "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
@@ -24,7 +27,7 @@ const statusConfig = {
 export default function ProofOfPayments() {
   const [proofs, setProofs] = useState<ProofRecord[]>([]);
   const API_URL = import.meta.env.VITE_API_URL;
-  useEffect(() => {
+  const loadProofs = () =>
     fetch(`${API_URL}/api/proofs`, { credentials: "include" })
       .then(res => res.json())
       .then((data: any[]) => setProofs(data.map(p => ({
@@ -37,20 +40,31 @@ export default function ProofOfPayments() {
         uploadedAt: new Date(p.uploaded_at + "Z").toLocaleString("en-ZA"),
         loanAmount: p.loan_amount,
         status: p.status,
+        amountPaid: p.amount_paid,
+        totals: p.loan_totals,
       }))));
-  }, []);
+ useEffect(() => { loadProofs(); }, []);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
 
   const updateStatus = async (id: string, status: "verified" | "rejected") => {
     const admin_notes = status === "rejected" ? prompt("Reason for rejecting?") : null;
+    let amount: number | null = null;
+    if (status === "verified") {
+      const typed = prompt("Amount paid (R), as shown on the proof:");
+      if (typed === null) return; // admin pressed Cancel
+      amount = Number(typed.replace(/[^\d.]/g, ""));
+      if (!amount) { alert("Please enter the amount that was paid"); return; }
+    }
     const res = await fetch(`${API_URL}/api/proofs/${id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, admin_notes }),
+      body: JSON.stringify({ status, admin_notes, amount }),
     });
-    if (res.ok) setProofs(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    // The balance changes for every proof on this loan, so reload them all
+    if (res.ok) loadProofs();
+    else alert((await res.json()).detail ?? "Could not update the proof");
   };
 
   const filtered = proofs.filter(p => {
@@ -197,6 +211,13 @@ export default function ProofOfPayments() {
                       <td className="px-6 py-4">
                         <div className="text-sm font-bold text-[#005B3F]">{proof.loanAmount}</div>
                         <div className="text-xs text-gray-500 font-medium mt-0.5">{proof.loanId}</div>
+                        {proof.totals && (
+                          <div className="text-xs mt-1 whitespace-nowrap">
+                            <span className="text-gray-500">Paid {rand(proof.totals.amount_paid)}</span>
+                            <span className="text-gray-300"> · </span>
+                            <span className="font-bold text-[#111827]">Balance {rand(proof.totals.balance)}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Uploaded date */}
@@ -213,6 +234,9 @@ export default function ProofOfPayments() {
                           {cfg.icon}
                           {cfg.label}
                         </span>
+                        {proof.amountPaid !== null && (
+                          <div className="text-xs text-[#005B3F] font-bold mt-1">{rand(proof.amountPaid)} recorded</div>
+                        )}
                       </td>
 
                       {/* Actions */}

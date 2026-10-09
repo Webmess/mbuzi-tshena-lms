@@ -19,6 +19,7 @@ from app.schemas import (
 from app.auth import get_current_user, get_current_admin, get_current_active_borrower
 from app.utils.risk_score import compute_risk_score, format_currency, relative_date
 from app.utils.sa_id import sa_id_matches_dob
+from app.utils.loan_balance import loan_totals
 from app.utils.email import send_application_confirmation
 from app.config import settings
 
@@ -196,6 +197,7 @@ class LoanSummary(BaseModel):
     outstanding_balance: float
     monthly_instalment: float
     total_repayable: float
+    amount_paid: float = 0
 
     class Config:
         from_attributes = True
@@ -243,9 +245,10 @@ def my_application_history(
                 loan=LoanSummary(
                     loan_number=a.loan.loan_number,
                     status=a.loan.status,
-                    outstanding_balance=float(a.loan.outstanding_balance),
+                    outstanding_balance=loan_totals(a.loan)["balance"],
                     monthly_instalment=float(a.loan.monthly_instalment),
                     total_repayable=float(a.loan.total_repayable),
+                    amount_paid=loan_totals(a.loan)["amount_paid"],
                 ) if a.loan else None,
             )
         )
