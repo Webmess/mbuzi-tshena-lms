@@ -6,12 +6,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
+from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    User, UserRole, Investment, InvestmentStatus, InvestmentTerm, InvestmentDeposit,
+    User, UserRole, Investment, InvestmentStatus, InvestmentTerm, InvestmentDeposit, InvestmentPayout,
     Notification, NotificationType,
 )
 from app.auth import get_current_user, get_current_admin
@@ -72,9 +73,14 @@ def email_customer(background_tasks: BackgroundTasks, inv: Investment, subject: 
         note=note,
     )
 def stage(i: Investment) -> str:
-    """Where the investment is: pending -> awaiting_deposit -> active (or rejected)."""
+    """Where the investment is: pending -> awaiting_deposit -> active -> matured -> paid_out (or rejected)."""
     if i.status == InvestmentStatus.APPROVED:
-        return "active" if i.term else "awaiting_deposit"
+        if not i.term:
+            return "awaiting_deposit"
+        if i.payout:
+            return "paid_out"
+        maturity = i.term.start_date + relativedelta(months=i.duration_months)
+        return "matured" if date.today() >= maturity else "active"
     return i.status.value
 
 def deposit_to_dict(d: InvestmentDeposit) -> dict:
@@ -106,6 +112,7 @@ def investment_to_dict(i: Investment) -> dict:
         "created_at": i.created_at.isoformat(),
         "pay_to": PAY_TO if stage(i) == "awaiting_deposit" else None,
         "deposits": [deposit_to_dict(d) for d in i.deposits],
+        "payout": {"amount": float(i.payout.amount), "paid_on": i.payout.paid_on.isoformat()} if i.payout else None,
         **investment_figures(i),
     }
 
@@ -364,4 +371,42 @@ def review_deposit(
             },
             note="Please upload a new proof of payment on your dashboard.",
         )
+    return investment_to_dict(inv)
+# Admin pays the investor out once the investment has matured
+@router.patch("/{investment_id}/payout")
+def pay_out_investment(
+    investment_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    inv = db.query(Investment).filter(Investment.investment_id == investment_id).first()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Investment not found")
+    if stage(inv) != "matured":
+        raise HTTPException(status_code=400, detail="Only a matured investment can be paid out")
+    amount = investment_figures(inv)["expected_at_maturity"]
+    db.add(InvestmentPayout(investment_id=inv.id, amount=amount, paid_on=date.today()))
+    db.add(Notification(
+        user_id=inv.user_id,
+        type=NotificationType.INVESTMENT_APPROVED,
+        message=f"Your investment {inv.investment_id} has matured and R{amount:,.2f} has been paid out to you.",
+    ))
+    db.commit()
+    db.refresh(inv)
+
+    email_customer(
+        background_tasks, inv,
+        subject=f"Your investment has been paid out – {inv.investment_id}",
+        heading="Your investment has been paid out",
+        intro="your investment has reached its maturity date and we have paid out your money.",
+        details={
+            "Reference": inv.investment_id,
+            "Amount invested": money(float(inv.amount)),
+            "Interest earned": money(amount - float(inv.amount)),
+            "Amount paid out": money(amount),
+            "Paid on": long_date(date.today().isoformat()),
+        },
+        note="Thank you for investing with Mbudzi Tshena. You are welcome to start a new investment from your dashboard.",
+    )
     return investment_to_dict(inv)

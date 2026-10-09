@@ -87,7 +87,8 @@ interface InvestmentRecord {
   months_done: number;
   value_today: number | null;
   interest_earned: number | null;
-  stage: "pending" | "awaiting_deposit" | "active" | "rejected";
+  stage: "pending" | "awaiting_deposit" | "active" | "matured" | "paid_out" | "rejected";
+  payout: { amount: number; paid_on: string } | null;
   pay_to: { account_name: string; bank: string; account_number: string; branch_code: string } | null;
   deposits: {
     id: string;
@@ -101,6 +102,8 @@ const INVESTMENT_STATUS: Record<string, { label: string; className: string }> = 
   pending:          { label: "Pending",          className: "bg-amber-50 text-amber-700 border-amber-100" },
   awaiting_deposit: { label: "Awaiting deposit", className: "bg-blue-50 text-blue-700 border-blue-100" },
   active:           { label: "Active",           className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30" },
+  matured:          { label: "Matured",          className: "bg-purple-50 text-purple-700 border-purple-100" },
+  paid_out:         { label: "Paid out",         className: "bg-gray-100 text-gray-600 border-gray-200" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-100" },
 };
 
@@ -482,7 +485,7 @@ export default function UserDashboard() {
     return true;
   };
   const totalInvested = useMemo(
-    () => investments.filter(i => i.stage === "active").reduce((sum, i) => sum + i.amount, 0),
+    () => investments.filter(i => i.stage === "active" || i.stage === "matured").reduce((sum, i) => sum + i.amount, 0),
     [investments]
   );
   const pendingInvested = useMemo(
@@ -491,7 +494,7 @@ export default function UserDashboard() {
   );
   // What the active investments are worth today, and how much they have grown so far
   const investedValueToday = useMemo(
-    () => investments.filter(i => i.stage === "active").reduce((sum, i) => sum + (i.value_today ?? i.amount), 0),
+    () => investments.filter(i => i.stage === "active" || i.stage === "matured").reduce((sum, i) => sum + (i.value_today ?? i.amount), 0),
     [investments]
   );
   const investmentGrowth = investedValueToday - totalInvested;
@@ -1205,7 +1208,7 @@ else alert("Upload failed");};
                       </div>
                       <div className="text-xl font-black text-[#005B3F] shrink-0">{formatMoney(inv.amount)}</div>
                     </div>
-                    {inv.stage === "active" && inv.value_today !== null ? (
+                    {(inv.stage === "active" || inv.stage === "matured") && inv.value_today !== null ? (
                       <div className="mt-3 pt-3 border-t border-gray-100">
                         <div className="grid grid-cols-3 gap-3 text-xs mb-3">
                           <div>
@@ -1232,7 +1235,17 @@ else alert("Upload failed");};
                           <span>{inv.months_done} of {inv.duration} months</span>
                           <span>Matures {formatDate(inv.maturity_date!)}</span>
                         </div>
+                     {inv.stage === "matured" && (
+                          <p className="mt-2 text-xs font-bold text-purple-700">
+                            Your investment has matured. We will pay out {formatMoney(inv.expected_at_maturity)} to you soon.
+                          </p>
+                        )}
                       </div>
+                    ) : inv.stage === "paid_out" && inv.payout ? (
+                      <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600">
+                        Paid out <span className="font-bold text-[#005B3F]">{formatMoney(inv.payout.amount)}</span> on{" "}
+                        {formatDate(inv.payout.paid_on)} (+{formatMoney(inv.payout.amount - inv.amount)} interest).
+                      </p>
                        ) : inv.stage === "awaiting_deposit" && inv.pay_to ? (
                       <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
                         <p className="text-xs text-gray-600 leading-relaxed">
