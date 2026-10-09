@@ -358,7 +358,7 @@ class Investment(Base):
     deposits: Mapped[List["InvestmentDeposit"]] = relationship(
         "InvestmentDeposit", back_populates="investment", order_by="InvestmentDeposit.uploaded_at.desc()"
     )
-
+    payout: Mapped[Optional["InvestmentPayout"]] = relationship("InvestmentPayout")    
 
 class InvestmentTerm(Base):
     """When an investment started and at what yearly rate (fixed for its whole duration)."""
@@ -391,3 +391,11 @@ class InvestmentDeposit(Base):
     file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     investment: Mapped["Investment"] = relationship("Investment", back_populates="deposits")
+class InvestmentPayout(Base):
+    """The money paid back to the investor once the investment matured."""
+    __tablename__ = "investment_payouts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    investment_id: Mapped[int] = mapped_column(Integer, ForeignKey("investments.id"), unique=True, nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    paid_on: Mapped[date] = mapped_column(Date, nullable=False)

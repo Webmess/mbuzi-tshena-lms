@@ -16,7 +16,8 @@ interface InvestorRequest {
   valueToday: number | null;
   monthsDone: number;
   maturityDate: string | null;
-  stage: "pending" | "awaiting_deposit" | "active" | "rejected";
+  stage: "pending" | "awaiting_deposit" | "active" | "matured" | "paid_out" | "rejected";
+  payout: { amount: number; paid_on: string } | null;
   deposits: {
     id: string;
     file_name: string;
@@ -31,6 +32,8 @@ const statusConfig = {
   pending:  { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-100",     icon: <Clock className="w-3.5 h-3.5" /> },
   awaiting_deposit: { label: "Awaiting deposit", className: "bg-blue-50 text-blue-700 border-blue-100", icon: <Clock className="w-3.5 h-3.5" /> },
   active:   { label: "Active",         className: "bg-[#E5F2D9] text-[#005B3F] border-[#B4D330]/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+  matured:  { label: "Matured",        className: "bg-purple-50 text-purple-700 border-purple-100", icon: <Clock className="w-3.5 h-3.5" /> },
+  paid_out: { label: "Paid out",       className: "bg-gray-100 text-gray-600 border-gray-200", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   rejected: { label: "Rejected",       className: "bg-red-50 text-red-700 border-red-100",           icon: <XCircle className="w-3.5 h-3.5" /> },
 };
 
@@ -62,6 +65,7 @@ export default function InvestorRequests() {
         maturityDate: i.maturity_date,
         stage: i.stage,
         deposits: i.deposits,
+        payout: i.payout,
       }))));
   useEffect(() => { loadRequests(); }, []);
   const [filter, setFilter]     = useState("All");
@@ -90,6 +94,15 @@ export default function InvestorRequests() {
     if (res.ok) loadRequests();
     else alert((await res.json()).detail ?? "Could not update the deposit");
   };
+  const payOut = async (req: InvestorRequest) => {
+    if (!confirm(`Pay out ${rand(req.expectedAtMaturity)} to ${req.name} for ${req.id}?`)) return;
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/${req.id}/payout`, {
+      method: "PATCH",
+      credentials: "include",
+    });
+    if (res.ok) loadRequests();
+    else alert((await res.json()).detail ?? "Could not pay out");
+  };
   const viewDeposit = async (depositId: string) => {
     const res = await fetch(`${import.meta.env.VITE_API_URL}/api/investments/deposits/${depositId}/file`, { credentials: "include" });
     if (!res.ok) { alert("Could not open file"); return; }
@@ -101,6 +114,8 @@ export default function InvestorRequests() {
     (filter === "Pending"          && r.stage === "pending")          ||
     (filter === "Awaiting deposit" && r.stage === "awaiting_deposit") ||
     (filter === "Active"           && r.stage === "active")           ||
+    (filter === "Matured"          && r.stage === "matured")          ||
+    (filter === "Paid out"         && r.stage === "paid_out")          ||
     (filter === "Rejected"         && r.stage === "rejected")
   );
   const groups = filtered.reduce<Record<string, InvestorRequest[]>>((acc, r) => {
@@ -110,7 +125,7 @@ export default function InvestorRequests() {
   }, {});
   // What all active investments are worth today (what the company owes investors right now)
   const activeValueToday = requests
-    .filter(r => r.stage === "active")
+    .filter(r => r.stage === "active" || r.stage === "matured")
     .reduce((sum, r) => sum + (r.valueToday ?? r.amount), 0);
   const pendingCount  = requests.filter(r => r.status === "pending").length;
   const approvedCount = requests.filter(r => r.stage === "active").length;
@@ -141,7 +156,7 @@ export default function InvestorRequests() {
 
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-4">
-        {["All", "Pending", "Awaiting deposit", "Active", "Rejected"].map(f => (
+        {["All", "Pending", "Awaiting deposit", "Active", "Matured", "Paid out", "Rejected"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={clsx("px-4 py-2 rounded-full text-sm font-bold transition-all border",
               filter === f
@@ -190,9 +205,13 @@ export default function InvestorRequests() {
                       </td>
                       <td className="px-6 py-4 font-bold text-[#005B3F] text-base">
                         R {req.amount.toLocaleString()}
-                        {req.stage === "active" && req.valueToday !== null ? (
+                        {(req.stage === "active" || req.stage === "matured") && req.valueToday !== null ? (
                           <div className="text-xs font-bold text-green-600 mt-0.5">
                             Now {rand(req.valueToday)} (+{rand(req.valueToday - req.amount)})
+                          </div>
+                          ) : req.stage === "paid_out" && req.payout ? (
+                          <div className="text-xs font-bold text-gray-600 mt-0.5">
+                            Paid out {rand(req.payout.amount)} on {new Date(req.payout.paid_on).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
                           </div>
                         ) : req.status === "pending" && (
                           <div className="text-xs font-medium text-gray-500 mt-0.5">
@@ -201,7 +220,7 @@ export default function InvestorRequests() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                        {req.stage === "active" ? `${req.monthsDone} of ${req.duration} months` : `${req.duration} months`}
+                        {req.stage === "active" || req.stage === "matured" ? `${req.monthsDone} of ${req.duration} months` : `${req.duration} months`}
                         {req.maturityDate && (
                           <div className="text-xs text-gray-500 mt-0.5">
                             Matures {new Date(req.maturityDate).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
@@ -263,6 +282,13 @@ export default function InvestorRequests() {
                                 Reject deposit
                               </button>
                             </>
+                          )}
+                          {req.stage === "matured" && (
+                            <button onClick={() => payOut(req)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 border border-purple-100 hover:bg-purple-100 transition-colors flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Mark paid out
+                            </button>
                           )}
                           {req.stage === "pending" && (
                             <button onClick={() => updateStatus(req.id, "rejected")}
