@@ -59,15 +59,6 @@ export const router = createBrowserRouter([
         path: "admin/login",
         Component: AdminLogin,
       },
-      
-      {
-        path: "apply",
-        Component: LoanApplication,
-      },
-      {
-        path: "confirm",
-        Component: LoanConfirmation,
-      },
 
       // Borrower protected route (redundant but kept for clarity)
       {
@@ -81,6 +72,14 @@ export const router = createBrowserRouter([
           {
             path: "dashboard",
             Component: UserDashboard,
+          },
+          {
+            path: "apply",
+            Component: LoanApplication,
+          },
+          {
+            path: "confirm",
+            Component: LoanConfirmation,
           },
         ],
       },
