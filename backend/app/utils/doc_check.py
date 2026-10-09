@@ -72,7 +72,15 @@ def find_amount_after(label: str, text: str):
             if not re.search(r"[A-Za-z]{3,}", match.group("gap")):
                 return float(match.group("amount").replace(" ", "").replace(",", ""))
     return None
-
+def regular_income(text: str) -> float:
+    """Money that arrives regularly: the same positive amount at least twice (salary, grant, pension).
+    Spending is negative and balances don't repeat, so they are left out."""
+    counts = {}
+    for sign, number in re.findall(r"R\s?(-?)\s?(\d[\d ,]*\.\d{2})", text):
+        amount = float(number.replace(" ", "").replace(",", ""))
+        if sign != "-" and amount >= 100:
+            counts[amount] = counts.get(amount, 0) + 1
+    return sum(amount for amount, times in counts.items() if times >= 2)
 def latest_date(text: str):
     found = []
     short_months = [m[:3] for m in MONTHS]
@@ -97,6 +105,11 @@ def check_id_document(text, app):
 
 def check_payslip(text, app):
     problems = []
+    if app.employment_status in ("unemployed", "retired"):
+        # A grant / pension letter instead of a payslip: the income is checked on the bank statement
+        if not words_found(app.full_name, text):
+            problems.append("Name on the proof of income does not match the application")
+        return problems
     if not words_found(app.full_name, text):
         problems.append("Name on the payslip does not match the application")
     if app.employer_name and not words_found(app.employer_name, text):
@@ -123,6 +136,13 @@ def check_bank_statement(text, app):
     bank = app.bank_name.replace("-", " ")
     if bank != "other" and bank not in text.lower():
         problems.append("Bank on the statement does not match the application")
+    income = float(app.monthly_income)
+    regular = regular_income(text)
+    if regular == 0:
+        problems.append("No regular income found on the statement (salary, grant or pension paid in every month)")
+    elif regular < income * 0.6:
+        problems.append(f"Regular income on the statement (R{regular:,.2f} a month) is much lower "
+                        f"than the stated income (R{income:,.2f})")
     return problems
 
 def check_proof_of_residence(text, app):
