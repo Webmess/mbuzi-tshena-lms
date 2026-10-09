@@ -3,4 +3,16 @@
 /env
 .python-version
 /backend/venv
->>>>>>> upstream/main
+
+# Local settings with passwords (each person keeps their own copy, see backend/.env.example)
+backend/.env
+
+# Old local SQLite databases (we now use the shared Neon database)
+*.db
+
+# Uploaded files stay on each laptop
+backend/uploads/
+
+# Python cache files
+__pycache__/
+*.pyc
