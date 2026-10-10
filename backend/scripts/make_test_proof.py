@@ -36,17 +36,18 @@ def main():
     p.add_argument("reference", help="loan reference (e.g. LNGX4O4W5SH) or investment ID (e.g. INV-34E7B6)")
     p.add_argument("amount", type=float, help="amount paid, e.g. 614.59")
     p.add_argument("--name", default="Test Customer", help="who paid")
+    p.add_argument("--bank", default="Capitec", help="the payer's bank, shown at the top")
     p.add_argument("--to", default="Mbudzi Tshena Financial Solutions", help="who was paid (beneficiary)")
     p.add_argument("--days-ago", type=int, default=0, help="payment date, in days before today")
     a = p.parse_args()
 
     paid_on = date.today() - timedelta(days=a.days_ago)
-    trx = f"CPT-{paid_on.year}-{random.randint(100000, 999999)}"
+    trx = f"{a.bank[:3].upper()}-{paid_on.year}-{random.randint(100000, 999999)}"
     amount = f"R {a.amount:,.2f}".replace(",", " ")
     rows = [
         ("Date paid", f"{paid_on.day:02d} {MONTHS[paid_on.month - 1]} {paid_on.year}"),
         ("Transaction ID", trx),
-        ("From", a.name),
+        ("From", f"{a.name} ({a.bank})"),
         ("Beneficiary", a.to),
         ("Beneficiary bank", "FNB 62004410"),
         ("Beneficiary reference", a.reference),
@@ -55,7 +56,7 @@ def main():
 
     img = Image.new("RGB", (1240, 1000), "white")
     d = ImageDraw.Draw(img)
-    d.text((80, 70), "Capitec - Payment Confirmation (SPECIMEN)", font=font(44, True), fill="black")
+    d.text((80, 70), f"{a.bank} - Payment Confirmation (SPECIMEN)", font=font(44, True), fill="black")
     d.text((80, 135), "This confirms that the following payment was made.", font=font(28), fill="black")
     y = 220
     for label, value in rows:
