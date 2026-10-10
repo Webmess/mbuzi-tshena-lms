@@ -73,18 +73,18 @@ async def create_application(
 
 
     result = model.predict_one(
-        # Missing fields (temporary defaults)
+        # Not asked on our form: neutral values
         Gender=0,
         Education=0,
-        Credit_History=0,
+        Credit_History=1,
         CoapplicantIncome=0,
 
         # Derived from your request
         Married=1 if data.marital_status.lower() == "married" else 0,
         Dependents=data.dependents,
-        Self_Employed=1 if data.employment_status.lower() == "self employed" else 0,
+        Self_Employed=1 if data.employment_status.lower() == "self-employed" else 0,
         ApplicantIncome=float(data.monthly_income),
-        LoanAmount=float(data.loan_amount),
+        LoanAmount=float(data.loan_amount) / 1000,
         Loan_Amount_Term=data.repayment_term,
 
         # Temporary location mapping
@@ -94,12 +94,31 @@ async def create_application(
     )
     
 
-    risk_score = result["rejection_probability"]
+    # Hybrid score: the machine-learning model and the affordability rules each count for half.
+    # The model learned from past loans; the rules check whether this instalment fits this income.
+    ml_risk = result["rejection_probability"]
+    rule_risk, _ = compute_risk_score(
+        monthly_income=float(data.monthly_income),
+        loan_amount=float(data.loan_amount),
+        repayment_term=data.repayment_term,
+        employment_status=data.employment_status,
+        years_employed=data.years_employed,
+        dependents=data.dependents,
+        monthly_expenses=data.monthly_expenses,
+        date_of_birth=data.date_of_birth,
+        existing_loans=data.existing_loans,
+    )
+    risk_score = round((ml_risk + rule_risk) / 2, 1)
 
-    if result["prediction"] == "Approved":
+    if risk_score < 25:
         ai_action = AIAction.AUTO_APPROVE
+    elif risk_score < 45:
+        ai_action = AIAction.MANUAL_REVIEW
+    elif risk_score < 70:
+        ai_action = AIAction.FLAGGED
     else:
         ai_action = AIAction.DECLINE
+
 
     app = LoanApplication(
         reference_number=ref,
