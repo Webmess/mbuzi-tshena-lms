@@ -154,7 +154,7 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: overrideStatus, comment: overrideComment.trim() }),
+        body: JSON.stringify({ status: overrideStatus, admin_notes: overrideComment.trim() }),
       });
       if (!res.ok) throw new Error("Override failed");
       const updated = await res.json();

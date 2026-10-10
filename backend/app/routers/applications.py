@@ -21,11 +21,8 @@ from app.utils.risk_score import compute_risk_score, format_currency, relative_d
 from app.utils.sa_id import sa_id_matches_dob
 from app.utils.loan_balance import loan_totals
 from app.utils.email import send_application_confirmation
+from app.utils.risk_assessment import assess_application, explain_application
 from app.config import settings
-
-from app.model.run import LoanPredictionModel
-
-model = LoanPredictionModel()
 
 router = APIRouter(prefix="/api/applications", tags=["Loan Applications"])
 
@@ -71,54 +68,10 @@ async def create_application(
     while db.query(LoanApplication).filter(LoanApplication.reference_number == ref).first():
         ref = generate_reference()
 
-
-    result = model.predict_one(
-        # Not asked on our form: neutral values
-        Gender=0,
-        Education=0,
-        Credit_History=1,
-        CoapplicantIncome=0,
-
-        # Derived from your request
-        Married=1 if data.marital_status.lower() == "married" else 0,
-        Dependents=data.dependents,
-        Self_Employed=1 if data.employment_status.lower() == "self-employed" else 0,
-        ApplicantIncome=float(data.monthly_income),
-        LoanAmount=float(data.loan_amount) / 1000,
-        Loan_Amount_Term=data.repayment_term,
-
-        # Temporary location mapping
-        Rural=0,
-        Semiurban=0,
-        Urban=0,
-    )
-    
-
-    # Hybrid score: the machine-learning model and the affordability rules each count for half.
-    # The model learned from past loans; the rules check whether this instalment fits this income.
-    ml_risk = result["rejection_probability"]
-    rule_risk, _ = compute_risk_score(
-        monthly_income=float(data.monthly_income),
-        loan_amount=float(data.loan_amount),
-        repayment_term=data.repayment_term,
-        employment_status=data.employment_status,
-        years_employed=data.years_employed,
-        dependents=data.dependents,
-        monthly_expenses=data.monthly_expenses,
-        date_of_birth=data.date_of_birth,
-        existing_loans=data.existing_loans,
-    )
-    risk_score = round((ml_risk + rule_risk) / 2, 1)
-
-    if risk_score < 25:
-        ai_action = AIAction.AUTO_APPROVE
-    elif risk_score < 45:
-        ai_action = AIAction.MANUAL_REVIEW
-    elif risk_score < 70:
-        ai_action = AIAction.FLAGGED
-    else:
-        ai_action = AIAction.DECLINE
-
+    # Hybrid AI risk score: machine-learning model + affordability rules (app/utils/risk_assessment.py)
+    assessment = assess_application(data)
+    risk_score = assessment["risk_score"]
+    ai_action = assessment["ai_action"]
 
     app = LoanApplication(
         reference_number=ref,
@@ -314,6 +267,13 @@ def get_application(
     # Borrowers can only see their own; admins can see all
     if current_user.role != UserRole.ADMIN and app.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    return with_explanation(app)
+
+
+def with_explanation(app: LoanApplication) -> LoanApplication:
+    """Attach the AI explanation, repayment probability and decision reason for the detail view."""
+    for key, value in explain_application(app).items():
+        setattr(app, key, value)
     return app
 
 
@@ -440,4 +400,4 @@ def update_application_status(
 
     db.commit()
     db.refresh(app)
-    return app
+    return with_explanation(app)

@@ -218,6 +218,13 @@ class LoanApplicationOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     documents: List["DocumentOut"] = []
+    # Filled in by app/utils/risk_assessment.py for the admin's detail view in Loan Requests
+    repaymentProbability: Optional[float] = None
+    aiExplanation: Optional[str] = None
+    decisionReason: Optional[str] = None
+    overrideHistory: Optional[dict] = None
+    purpose: Optional[str] = None
+    submitted_date: Optional[str] = Field(None, serialization_alias="date")
 
     model_config = ConfigDict(from_attributes=True)
 
