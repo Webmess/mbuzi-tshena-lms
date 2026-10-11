@@ -156,7 +156,10 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: overrideStatus, admin_notes: overrideComment.trim() }),
       });
-      if (!res.ok) throw new Error("Override failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || "Override failed");
+      }
       const updated = await res.json();
       onUpdate(request.id, updated);
       setRequest(updated);
@@ -393,7 +396,11 @@ function DetailModal({ requestId, onClose, onUpdate }: DetailModalProps) {
           )}
 
           {/* Override section */}
-          {!overrideSuccess ? (
+          {request.status === "Approved" && !overrideSuccess ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600">
+              This loan is approved and active, so the decision is final.
+            </div>
+          ) : !overrideSuccess ? (
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <button
                 onClick={() => setShowOverride(o => !o)}

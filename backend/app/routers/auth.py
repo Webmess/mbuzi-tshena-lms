@@ -38,6 +38,26 @@ class RegistrationOTPRequest(BaseModel):
 
 pending_registrations = {}
 
+MAX_FAILED_LOGINS = 5
+LOCK_MINUTES = 15
+failed_logins = {}  # email or ID number -> times of recent wrong passwords
+
+
+def check_not_locked(key: str):
+    """Refuse to even check the password after 5 wrong tries in 15 minutes."""
+    now = datetime.utcnow()
+    recent = [t for t in failed_logins.get(key, []) if now - t < timedelta(minutes=LOCK_MINUTES)]
+    failed_logins[key] = recent
+    if len(recent) >= MAX_FAILED_LOGINS:
+        wait = LOCK_MINUTES - int((now - recent[0]).total_seconds() // 60)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many wrong attempts. Please try again in {wait} minutes.",
+        )
+
+def record_failed_login(key: str):
+    failed_logins.setdefault(key, []).append(datetime.utcnow())
+
 
 @router.post("/register", status_code=status.HTTP_200_OK)
 async def register(user_in: UserRegister, db: Session = Depends(get_db)):
@@ -66,6 +86,10 @@ def verify_registration(data: RegistrationOTPRequest, db: Session = Depends(get_
         pending_registrations.pop(email, None)
         raise HTTPException(status_code=400, detail="Registration OTP expired or not found")
     if registration["otp"] != data.otp:
+        registration["tries"] = registration.get("tries", 0) + 1
+        if registration["tries"] >= 5:
+            pending_registrations.pop(email, None)
+            raise HTTPException(status_code=400, detail="Too many wrong codes. Please sign up again.")
         raise HTTPException(status_code=400, detail="Incorrect OTP code")
     if get_user_by_email(db, email) or get_user_by_id_number(db, registration["data"]["id_number"]):
         pending_registrations.pop(email, None)
@@ -93,15 +117,18 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    key = form_data.username.strip().lower()
+    check_not_locked(key)
     user = authenticate_user(db, form_data.username, form_data.password)
 
     if not user:
+        record_failed_login(key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email/ID or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+    failed_logins.pop(key, None)
     # Get client IP address
     client_ip = request.client.host if request.client else "Unknown"
 
@@ -186,6 +213,8 @@ async def login_json(
     response: Response,
     db: Session = Depends(get_db),
 ):
+    key = credentials.identifier.strip().lower()
+    check_not_locked(key)
     user = authenticate_user(
         db,
         credentials.identifier,
@@ -193,10 +222,12 @@ async def login_json(
     )
 
     if not user:
+        record_failed_login(key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email/ID or password",
         )
+    failed_logins.pop(key, None)
 
     if user.role.value == "admin":
         raise HTTPException(
@@ -354,12 +385,16 @@ async def login_json(
 
 @router.post("/admin/login", response_model=Token)
 def admin_login(credentials: AdminLogin, response: Response, db: Session = Depends(get_db)):
+    key = credentials.email.strip().lower()
+    check_not_locked(key)
     user = authenticate_user(db, credentials.email, credentials.password)
     if not user or user.role != UserRole.ADMIN:
+        record_failed_login(key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect Email or Password.",
         )
+    failed_logins.pop(key, None)
     access_token = create_access_token(
         data={"sub": user.email, "role": user.role.value},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -396,7 +431,7 @@ MAX_RESET_TRIES = 5
 async def forgot_password(email: str, db: Session = Depends(get_db)):
     user = get_user_by_email(db, email)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return {"message": "If that email has an account, a reset code was sent to it."}
 
     reset_token = generate_reset_token()
     reset_tokens[email] = {
@@ -407,7 +442,7 @@ async def forgot_password(email: str, db: Session = Depends(get_db)):
 
     await send_reset_email(user.email, user.full_name or user.email, reset_token)
 
-    return {"message": "Password reset code sent to your email"}
+    return {"message": "If that email has an account, a reset code was sent to it."}
 
 
 
@@ -420,7 +455,7 @@ def verify_reset_otp(
 ):
     user = get_user_by_email(db, email)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=400, detail="This code has expired. Please request a new one.")
 
     entry = reset_tokens.get(email)
     if not entry or entry["expires_at"] < datetime.utcnow():

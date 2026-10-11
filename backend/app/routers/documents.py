@@ -7,12 +7,23 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database import get_db
-from app.models import User, LoanApplication, Document, DocumentCheck, UserRole
+from app.models import User, LoanApplication, Document, DocumentCheck, UserRole, ApplicationStatus
 from app.utils.doc_check import run_document_check
 from app.schemas import DocumentOut, Message
 from app.auth import get_current_user, get_current_admin
 from app.config import settings
 from app.utils.file_store import store_file, restore_file, delete_stored_file
+
+OPEN_STATUSES = (ApplicationStatus.PENDING, ApplicationStatus.UNDER_REVIEW)
+
+
+def check_documents_unlocked(app: LoanApplication, user: User):
+    """Customers can only change documents while the application is still being reviewed."""
+    if user.role != UserRole.ADMIN and app.status not in OPEN_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This application is {app.status.value}, so its documents can no longer be changed.",
+        )
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -44,6 +55,7 @@ async def upload_document(
 
     if current_user.role != UserRole.ADMIN and app.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    check_documents_unlocked(app, current_user)
 
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
@@ -115,9 +127,10 @@ def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     app = db.query(LoanApplication).filter(LoanApplication.id == doc.application_id).first()
+    
     if current_user.role != UserRole.ADMIN and (not app or app.user_id != current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized")
-
+    check_documents_unlocked(app, current_user)
     # Remove file
     try:
         if os.path.exists(doc.file_path):
