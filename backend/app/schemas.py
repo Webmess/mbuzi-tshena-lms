@@ -71,7 +71,13 @@ class UserRegister(BaseModel):
     full_name: str = Field(..., min_length=2)
     id_number: str = Field(..., min_length=13, max_length=13)
     phone_number: str = Field(..., min_length=10, max_length=15)
-
+    @field_validator("email", mode="before")
+    @classmethod
+    def email_lowercase_only(cls, v: str) -> str:
+        if isinstance(v, str) and any(c.isupper() for c in v):
+            raise ValueError("Email must be in lowercase letters only")
+        return v.strip() if isinstance(v, str) else v
+    
     @field_validator("id_number")
     @classmethod
     def validate_sa_id(cls, v: str) -> str:

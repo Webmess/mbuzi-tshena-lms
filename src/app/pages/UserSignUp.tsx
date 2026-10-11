@@ -174,7 +174,7 @@ export default function UserSignUp() {
     setError("");
 
     const trimmedFullName = fullName.trim();
-    const trimmedEmail = identifier.trim().toLowerCase();
+    const trimmedEmail = identifier.trim();
     const trimmedIdNumber = idNumber.trim();
     const trimmedPhoneNumber = phoneNumber.trim();
 
@@ -182,9 +182,11 @@ export default function UserSignUp() {
     if (!trimmedFullName) return setError("Please enter your full name.");
     if (!trimmedEmail) return setError("Please enter your email address.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) return setError("Enter a valid email address.");
+    if (/[A-Z]/.test(trimmedEmail)) return setError("Email must be in lowercase letters only.");
     if (!trimmedIdNumber) return setError("Please enter your ID number.");
     if (!isValidSaId(trimmedIdNumber)) return setError("This is not a valid South African ID number.");
     if (!trimmedPhoneNumber) return setError("Please enter your phone number.");
+    if (!/^0\d{9}$/.test(trimmedPhoneNumber)) return setError("Phone number must start with 0 and be 10 digits.");
     if (password.length < 8) return setError("Your password must be at least 8 characters long.");
     if (password !== confirmPassword) return setError("Passwords do not match.");
 
@@ -453,7 +455,7 @@ export default function UserSignUp() {
                   value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)}
                   disabled={loading}
                   className="block w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-lg text-[#111827] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B4D330] focus:border-transparent transition-all font-medium sm:text-sm shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  placeholder="+27 71 234 5678" />
+                  placeholder="e.g., 0821234567" maxLength={10} />
               </div>
             </div>
 
