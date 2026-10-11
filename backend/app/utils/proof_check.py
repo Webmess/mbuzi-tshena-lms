@@ -40,6 +40,8 @@ def check_proof(proof: ProofOfPayment, db):
     amount = find_amount_after("amount", text)
     if amount is None:
         problems.append("Could not find the amount paid")
+    elif amount <= 0:
+        problems.append(f"The amount on this proof is negative or zero (R{amount:,.2f})")
     paid_on = latest_date(text)
     if paid_on is None:
         problems.append("Could not find the payment date")

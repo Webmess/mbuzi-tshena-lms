@@ -614,7 +614,11 @@ export default function LoanApplication() {
                       id="dependents"
                       type="number"
                       min="0"
-                      {...register("dependents", { required: "Number of dependents is required" })}
+                      {...register("dependents", {
+                        required: "Number of dependents is required",
+                        min: { value: 0, message: "Dependents cannot be negative" },
+                        max: { value: 20, message: "Please enter a realistic number" },
+                      })}
                       placeholder="e.g., 2"
                       className="mt-1"
                     />
@@ -742,6 +746,7 @@ export default function LoanApplication() {
                         step="0.5"
                         {...register("yearsAtAddress", {
                           required: "Years at address is required",
+                          min: { value: 0, message: "Years at address cannot be negative" },
                         })}
                         placeholder="e.g., 3"
                         className="mt-1"
@@ -893,7 +898,10 @@ export default function LoanApplication() {
                         id="monthlyIncome"
                         type="number"
                         min="0"
-                        {...register("monthlyIncome", { required: "Monthly income is required" })}
+                        {...register("monthlyIncome", {
+                          required: "Monthly income is required",
+                          min: { value: 1, message: "Monthly income must be more than R0" },
+                        })}
                         placeholder="e.g., 25000"
                         className="mt-1"
                       />
@@ -914,7 +922,11 @@ export default function LoanApplication() {
                         type="number"
                         min="0"
                         step="0.5"
-                        {...register("yearsEmployed", { required: "Years employed is required" })}
+                        {...register("yearsEmployed", {
+                          required: "Years employed is required",
+                          min: { value: 0, message: "Years employed cannot be negative" },
+                          max: { value: 60, message: "Please enter a realistic number of years" },
+                        })}
                         placeholder="e.g., 2.5"
                         className="mt-1"
                       />
@@ -938,6 +950,7 @@ export default function LoanApplication() {
                       min="0"
                       {...register("monthlyExpenses", {
                         required: "Monthly expenses is required",
+                        min: { value: 0, message: "Expenses cannot be negative" },
                       })}
                       placeholder="e.g., 15000"
                       className="mt-1"
