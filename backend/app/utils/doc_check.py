@@ -70,7 +70,12 @@ def find_amount_after(label: str, text: str):
         for match in re.finditer(pattern, text, re.IGNORECASE):
             # Skip it if a real word sits in between, e.g. "Gross Pay DEDUCTIONS R3744.00"
             if not re.search(r"[A-Za-z]{3,}", match.group("gap")):
-                return float(match.group("amount").replace(" ", "").replace(",", ""))
+                value = float(match.group("amount").replace(" ", "").replace(",", ""))
+                # "-R5 000.00", "R -5 000.00" or "(R5 000.00)" mean a negative amount
+                before = text[max(0, match.start("amount") - 3):match.start("amount")]
+                if re.search(r"(-R?|\(R?)\s?$", before):
+                    value = -value
+                return value
     return None
 def regular_income(text: str) -> float:
     """Money that arrives regularly: the same positive amount at least twice (salary, grant, pension).

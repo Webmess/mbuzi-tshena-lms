@@ -389,6 +389,8 @@ def generate_reset_token():
 
 reset_tokens = {}
 verified_reset_tokens = {}
+RESET_CODE_MINUTES = 10
+MAX_RESET_TRIES = 5
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
 async def forgot_password(email: str, db: Session = Depends(get_db)):
@@ -397,11 +399,14 @@ async def forgot_password(email: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     reset_token = generate_reset_token()
-    reset_tokens[email] = reset_token
+    reset_tokens[email] = {
+        "code": reset_token,
+        "expires_at": datetime.utcnow() + timedelta(minutes=RESET_CODE_MINUTES),
+        "tries": 0,
+    }
 
     await send_reset_email(user.email, user.full_name or user.email, reset_token)
 
-    print(f"Password reset code for {email}: {reset_token}")  # For debugging purposes
     return {"message": "Password reset code sent to your email"}
 
 
@@ -417,10 +422,15 @@ def verify_reset_otp(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-
-    print(f"Verifying reset code for {email}: {reset_code}")
-    print(f"Stored reset code for {email}: {reset_tokens.get(email)}")
-    if reset_tokens.get(email) != reset_code:
+    entry = reset_tokens.get(email)
+    if not entry or entry["expires_at"] < datetime.utcnow():
+        reset_tokens.pop(email, None)
+        raise HTTPException(status_code=400, detail="This code has expired. Please request a new one.")
+    if entry["code"] != reset_code:
+        entry["tries"] += 1
+        if entry["tries"] >= MAX_RESET_TRIES:
+            reset_tokens.pop(email, None)
+            raise HTTPException(status_code=400, detail="Too many wrong codes. Please request a new one.")
         raise HTTPException(status_code=400, detail="Incorrect OTP code")
 
     reset_tokens.pop(email, None)

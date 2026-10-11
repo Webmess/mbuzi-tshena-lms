@@ -23,6 +23,8 @@ def check_deposit(dep: InvestmentDeposit, db):
     amount = find_amount_after("amount", text)
     if amount is None:
         problems.append("Could not find the amount paid")
+    elif amount <= 0:
+        problems.append(f"The amount on this proof is negative or zero (R{amount:,.2f})")
     elif abs(amount - float(inv.amount)) > 0.01:
         problems.append(f"Amount paid R{amount:,.2f} is not the investment amount R{float(inv.amount):,.2f}")
     paid_on = latest_date(text)

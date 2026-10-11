@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from enum import Enum
 import re
@@ -130,29 +130,29 @@ class LoanApplicationCreate(BaseModel):
     phone_number: str
     email: EmailStr
     marital_status: Optional[str] = None
-    dependents: Optional[int] = 0
+    dependents: Optional[int] = Field(0, ge=0, le=20)
 
     # Address
     residential_address: str
     city: str
     province: str
     postal_code: str
-    years_at_address: Optional[float] = None
+    years_at_address: Optional[float] = Field(None, ge=0, le=100)
     residential_status: Optional[str] = None
 
     # Employment
-    employment_status: str
+    employment_status: Literal["employed", "part-time", "self-employed", "contract", "unemployed", "retired"]
     employer_name: Optional[str] = None
     employer_address: Optional[str] = None
     occupation: Optional[str] = None
-    monthly_income: float = Field(..., gt=0)
-    years_employed: Optional[float] = None
+    monthly_income: float = Field(..., gt=0, le=10_000_000)
+    years_employed: Optional[float] = Field(None, ge=0, le=60)
 
     # Loan
-    loan_amount: float = Field(..., gt=0)
+    loan_amount: float = Field(..., ge=1000, le=500000)
     loan_purpose: str
-    loan_type: str
-    repayment_term: int = Field(..., ge=1, le=120)
+    loan_type: Literal["personal", "business", "education", "home-improvement", "debt-consolidation", "emergency"]
+    repayment_term: Literal[6, 12, 24, 36, 48, 60]
 
     # Banking
     bank_name: str
@@ -168,7 +168,7 @@ class LoanApplicationCreate(BaseModel):
     reference2_relationship: Optional[str] = None
 
     # Additional
-    monthly_expenses: Optional[float] = None
+    monthly_expenses: Optional[float] = Field(None, ge=0, le=10_000_000)
     existing_loans: Optional[str] = None
     additional_info: Optional[str] = None
 

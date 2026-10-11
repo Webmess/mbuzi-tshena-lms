@@ -63,6 +63,11 @@ async def create_application(
         )
     if not sa_id_matches_dob(data.id_number, data.date_of_birth):
         raise HTTPException(status_code=400, detail="ID number and date of birth do not match.")
+    if current_user.id_number and data.id_number != current_user.id_number:
+        raise HTTPException(
+            status_code=400,
+            detail="The ID number must be the same as the one on your account.",
+        )
     # Generate unique reference
     ref = generate_reference()
     while db.query(LoanApplication).filter(LoanApplication.reference_number == ref).first():
@@ -80,7 +85,7 @@ async def create_application(
         id_number=data.id_number,
         date_of_birth=data.date_of_birth,
         phone_number=data.phone_number,
-        email=data.email,
+        email=current_user.email,
         marital_status=data.marital_status,
         dependents=data.dependents,
         residential_address=data.residential_address,
@@ -133,7 +138,7 @@ async def create_application(
     # Send confirmation email in background
     background_tasks.add_task(
         send_application_confirmation,
-        to_email=data.email,
+        to_email=current_user.email,
         applicant_name=data.full_name,
         reference_number=ref,
         loan_amount=float(data.loan_amount),
