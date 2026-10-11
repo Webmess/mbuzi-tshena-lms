@@ -720,7 +720,10 @@ export default function LoanApplication() {
                       </Label>
                       <Input
                         id="postalCode"
-                        {...register("postalCode", { required: "Postal code is required" })}
+                        {...register("postalCode", {
+                          required: "Postal code is required",
+                          pattern: { value: /^\d{4}$/, message: "Postal code must be 4 digits" },
+                        })}
                         placeholder="e.g., 2000"
                         maxLength={4}
                         className="mt-1"
@@ -1168,7 +1171,10 @@ export default function LoanApplication() {
                     </Label>
                     <Input
                       id="accountNumber"
-                      {...register("accountNumber", { required: "Account number is required" })}
+                      {...register("accountNumber", {
+                        required: "Account number is required",
+                        pattern: { value: /^\d{6,16}$/, message: "Account number must be 6 to 16 digits" },
+                      })}
                       placeholder="e.g., 1234567890"
                       className="mt-1"
                     />
@@ -1220,6 +1226,7 @@ export default function LoanApplication() {
                           type="tel"
                           {...register("reference1Phone", {
                             required: "Reference phone is required",
+                            pattern: { value: /^0\d{9}$/, message: "Phone number must start with 0 and be 10 digits" },
                           })}
                           placeholder="e.g., 0821234567"
                           maxLength={10}
@@ -1288,6 +1295,7 @@ export default function LoanApplication() {
                           type="tel"
                           {...register("reference2Phone", {
                             required: "Reference phone is required",
+                            pattern: { value: /^0\d{9}$/, message: "Phone number must start with 0 and be 10 digits" },
                           })}
                           placeholder="e.g., 0831234567"
                           maxLength={10}

@@ -181,7 +181,30 @@ class LoanApplicationCreate(BaseModel):
             raise ValueError("This is not a valid South African ID number. Please check it.")
         return v
 
+    @field_validator("phone_number", "reference1_phone", "reference2_phone")
+    @classmethod
+    def validate_phone_digits(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        if not re.fullmatch(r"0\d{9}", v):
+            raise ValueError("Phone number must start with 0 and be 10 digits")
+        return v
 
+    @field_validator("postal_code")
+    @classmethod
+    def validate_postal_code(cls, v: str) -> str:
+        if not re.fullmatch(r"\d{4}", v):
+            raise ValueError("Postal code must be 4 digits")
+        return v
+
+    @field_validator("account_number")
+    @classmethod
+    def validate_account_number(cls, v: str) -> str:
+        if not re.fullmatch(r"\d{6,16}", v):
+            raise ValueError("Account number must be 6 to 16 digits")
+        return v
+
+    
 class LoanApplicationUpdateStatus(BaseModel):
     status: ApplicationStatus
     admin_notes: Optional[str] = None

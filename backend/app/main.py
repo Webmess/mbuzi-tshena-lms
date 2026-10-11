@@ -150,12 +150,6 @@ app.include_router(proofs.router)
 app.include_router(investments.router)
 app.include_router(chatbot.router)
 
-# Serve uploaded files in debug
-if settings.DEBUG:
-    upload_path = Path(settings.UPLOAD_DIR)
-    upload_path.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(upload_path)), name="uploads")
-
 
 @app.get("/")
 def root():

@@ -382,6 +382,23 @@ def update_application_status(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    if update.status == app.status:
+        raise HTTPException(status_code=400, detail=f"This application is already {app.status.value}.")
+    if app.loan:
+        raise HTTPException(
+            status_code=400,
+            detail="This application already has an active loan, so the decision can't be changed.",
+        )
+    if (
+        update.status == ApplicationStatus.APPROVED
+        and app.status == ApplicationStatus.REJECTED
+        and count_open_loans(db, app.user_id) >= settings.MAX_OPEN_LOANS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"This customer already has {settings.MAX_OPEN_LOANS} open loans.",
+        )
+
     app.status = update.status
     if update.admin_notes:
         app.admin_notes = update.admin_notes
