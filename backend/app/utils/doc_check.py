@@ -61,12 +61,15 @@ def words_found(expected: str, text: str) -> bool:
         or process.extractOne(w, text_words, scorer=fuzz.ratio, score_cutoff=85)
     )
     return found / len(words) >= 0.66
+# Letters OCR often confuses with digits: "Am0unt", "Gr0ss Pay"
+OCR_LOOKALIKES = {"o": "[o0]", "i": "[il1]", "l": "[il1]"}
 
 def find_amount_after(label: str, text: str):
     amount = r"(?P<amount>\d[\d ,]*\.\d{2})"
     gap = r"(?P<gap>\D{0,15}?)"
     # The amount usually follows its label, but OCR may put it before: "R 18 500.00 Net Pay"
-    for pattern in (label + gap + amount, amount + gap + label):
+    label_re = "".join(OCR_LOOKALIKES.get(ch, re.escape(ch)) for ch in label)
+    for pattern in (label_re + gap + amount, amount + gap + label_re):
         for match in re.finditer(pattern, text, re.IGNORECASE):
             # Skip it if a real word sits in between, e.g. "Gross Pay DEDUCTIONS R3744.00"
             if not re.search(r"[A-Za-z]{3,}", match.group("gap")):
