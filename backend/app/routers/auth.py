@@ -59,8 +59,28 @@ def record_failed_login(key: str):
     failed_logins.setdefault(key, []).append(datetime.utcnow())
 
 
+MAX_CODE_REQUESTS = 3
+CODE_REQUEST_MINUTES = 15
+code_requests = {}  # email -> times a code (sign-up or reset) was sent
+
+
+def check_code_requests(email: str):
+    """Allow at most 3 codes per email in 15 minutes, then count this request."""
+    now = datetime.utcnow()
+    recent = [t for t in code_requests.get(email, []) if now - t < timedelta(minutes=CODE_REQUEST_MINUTES)]
+    if len(recent) >= MAX_CODE_REQUESTS:
+        wait = CODE_REQUEST_MINUTES - int((now - recent[0]).total_seconds() // 60)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many code requests. Please try again in {wait} minutes.",
+        )
+    recent.append(now)
+    code_requests[email] = recent
+
+
 @router.post("/register", status_code=status.HTTP_200_OK)
 async def register(user_in: UserRegister, db: Session = Depends(get_db)):
+    check_code_requests(user_in.email.lower())
     if get_user_by_email(db, user_in.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     if get_user_by_id_number(db, user_in.id_number):
@@ -429,6 +449,7 @@ MAX_RESET_TRIES = 5
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
 async def forgot_password(email: str, db: Session = Depends(get_db)):
+    check_code_requests(email.lower())
     user = get_user_by_email(db, email)
     if not user:
         return {"message": "If that email has an account, a reset code was sent to it."}

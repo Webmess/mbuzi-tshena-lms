@@ -238,14 +238,43 @@ export default function UserSignUp() {
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
+    setCanResend(false); // stop double clicks while the request runs
     setOtp(Array(6).fill(""));
     setOtpError("");
-    setResendKey(k => k + 1);
-    // Optionally call backend to resend OTP here
-    // toast.success("Verification code resent to " + identifier);
-    alert("Verification code resent to " + identifier); // simple for now
+    try {
+      const response = await fetch(`${API_URL}/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          email: identifier.trim(),
+          id_number: idNumber.trim(),
+          phone_number: phoneNumber.trim(),
+          password,
+        }),
+      });
+      if (!response.ok) {
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+        setOtpError(typeof data?.detail === "string" ? data.detail : "Failed to resend code. Please try again.");
+        setCanResend(true);
+        return;
+      }
+      setResendKey(k => k + 1); // restarts the 30s countdown
+    } catch {
+      setOtpError("Unable to connect to the server. Please try again.");
+      setCanResend(true);
+    }
   };
 
   const handleVerify = async (e: React.FormEvent) => {
